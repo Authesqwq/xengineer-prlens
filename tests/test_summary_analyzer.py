@@ -177,19 +177,62 @@ class TestParseSummaryResponse:
         with pytest.raises(SummaryResponseParseError, match="summary"):
             parse_summary_response(json.dumps(data))
 
-    def test_main_changes_not_list_raises(self):
+    def test_uncertainties_string_normalized_to_single_element_list(self):
         import json
-        data = _sample_summary_json(main_changes="not a list")
-        with pytest.raises(SummaryResponseParseError, match="main_changes"):
-            parse_summary_response(json.dumps(data))
+        data = _sample_summary_json(uncertainties="Need more context")
+        result = parse_summary_response(json.dumps(data))
+        assert result.uncertainties == ["Need more context"]
 
-    def test_affected_areas_not_list_raises(self):
+    def test_uncertainties_none_string_becomes_empty_list(self):
+        import json
+        data = _sample_summary_json(uncertainties="None")
+        result = parse_summary_response(json.dumps(data))
+        assert result.uncertainties == []
+
+    def test_main_changes_string_normalized_to_list(self):
+        import json
+        data = _sample_summary_json(main_changes="Updated login logic")
+        result = parse_summary_response(json.dumps(data))
+        assert result.main_changes == ["Updated login logic"]
+
+    def test_affected_areas_string_normalized_to_list(self):
+        import json
+        data = _sample_summary_json(affected_areas="Authentication")
+        result = parse_summary_response(json.dumps(data))
+        assert result.affected_areas == ["Authentication"]
+
+    def test_uncertainties_empty_string_becomes_empty_list(self):
+        import json
+        data = _sample_summary_json(uncertainties="")
+        result = parse_summary_response(json.dumps(data))
+        assert result.uncertainties == []
+
+    def test_uncertainties_none_value_becomes_empty_list(self):
+        import json
+        data = _sample_summary_json(uncertainties=None)
+        result = parse_summary_response(json.dumps(data))
+        assert result.uncertainties == []
+
+    def test_lists_still_work_normally(self):
+        import json
+        data = _sample_summary_json(main_changes=["a", "b"], uncertainties=["x"])
+        result = parse_summary_response(json.dumps(data))
+        assert result.main_changes == ["a", "b"]
+        assert result.uncertainties == ["x"]
+
+    def test_list_elements_converted_to_string(self):
+        import json
+        data = _sample_summary_json(main_changes=[1, 2])
+        result = parse_summary_response(json.dumps(data))
+        assert result.main_changes == ["1", "2"]
+
+    def test_dict_still_raises(self):
         import json
         data = _sample_summary_json(affected_areas={"x": 1})
         with pytest.raises(SummaryResponseParseError, match="affected_areas"):
             parse_summary_response(json.dumps(data))
 
-    def test_uncertainties_not_list_raises(self):
+    def test_int_still_raises(self):
         import json
         data = _sample_summary_json(uncertainties=123)
         with pytest.raises(SummaryResponseParseError, match="uncertainties"):

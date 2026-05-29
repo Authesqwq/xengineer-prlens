@@ -43,7 +43,9 @@ _SYSTEM_PROMPT = """\
 You are a code review assistant. Only use the provided PR information and diff \
 context to generate a summary. Do not supplement with knowledge outside the \
 provided context. Mark anything uncertain under "uncertainties". Do not \
-output whether the PR should be merged. Output must be JSON only."""
+output whether the PR should be merged. Output must be JSON only.
+The fields main_changes, affected_areas, and uncertainties must always be \
+JSON arrays. If there is no item, return an empty array []."""
 
 
 def build_summary_messages(pr_info, diff_context) -> list[dict[str, str]]:
@@ -79,6 +81,27 @@ def build_summary_messages(pr_info, diff_context) -> list[dict[str, str]]:
 
 
 _FENCE_PATTERN = re.compile(r"```(?:json)?\s*([\s\S]*?)```", re.IGNORECASE)
+
+_EMPTY_STR_VALUES = {"", "none", "无", "n/a"}
+
+
+def _normalize_string_list_field(value, field_name: str) -> list[str]:
+    """Normalize a field that should be a list of strings.
+
+    Handles LLMs that return a single string instead of an array.
+    """
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return [str(item) for item in value]
+    if isinstance(value, str):
+        stripped = value.strip()
+        if stripped.lower() in _EMPTY_STR_VALUES:
+            return []
+        return [stripped]
+    raise SummaryResponseParseError(
+        f'Field "{field_name}" must be a list or string, got {type(value).__name__}'
+    )
 
 
 def parse_summary_response(content: str) -> SummaryResult:
@@ -116,16 +139,15 @@ def parse_summary_response(content: str) -> SummaryResult:
     if "summary" not in data:
         raise SummaryResponseParseError('Missing required field "summary" in model response')
 
-    main_changes = data.get("main_changes", [])
-    affected_areas = data.get("affected_areas", [])
-    uncertainties = data.get("uncertainties", [])
-
-    for name, value in [("main_changes", main_changes), ("affected_areas", affected_areas),
-                        ("uncertainties", uncertainties)]:
-        if not isinstance(value, list):
-            raise SummaryResponseParseError(
-                f'Field "{name}" must be a list, got {type(value).__name__}'
-            )
+    main_changes = _normalize_string_list_field(
+        data.get("main_changes", []), "main_changes"
+    )
+    affected_areas = _normalize_string_list_field(
+        data.get("affected_areas", []), "affected_areas"
+    )
+    uncertainties = _normalize_string_list_field(
+        data.get("uncertainties", []), "uncertainties"
+    )
 
     return SummaryResult(
         summary=data["summary"],
