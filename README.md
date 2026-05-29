@@ -28,11 +28,12 @@ PRLens 是一个面向开发者的 AI PR Review 助手。用户输入 GitHub PR 
 - PR2: AI product documents added
 - PR3: GitHub PR URL parser added
 - PR4: GitHub PR basic info client added
+- PR5: GitHub PR changed files client added
 
 ## Run Tests
 
 ```bash
-python -m pytest -q
+pytest -q
 ```
 
 ## 当前状态
