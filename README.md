@@ -31,6 +31,7 @@ PRLens 是一个面向开发者的 AI PR Review 助手。用户输入 GitHub PR 
 - PR5: GitHub PR changed files client added
 - PR6: Diff processor added
 - PR7: LLM client added
+- PR8: PR summary analyzer added
 
 ## Run Tests
 
