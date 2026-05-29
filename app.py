@@ -2,7 +2,7 @@
 PRLens: AI PR Review Assistant — Minimal Streamlit Demo.
 
 Ties together URL parsing, GitHub data fetching, diff processing,
-and LLM-based summary generation into a single-page workflow.
+LLM-based summary generation, and risk analysis into a single-page workflow.
 """
 
 import os
@@ -22,6 +22,7 @@ from src.llm_client import (
     load_llm_config_from_env,
 )
 from src.summary_analyzer import SummaryAnalyzerError, generate_pr_summary
+from src.risk_analyzer import RiskAnalyzerError, analyze_pr_risks
 
 load_dotenv()
 
@@ -32,7 +33,8 @@ load_dotenv()
 st.set_page_config(page_title="PRLens", page_icon="🔍", layout="wide")
 st.title("PRLens: AI PR Review Assistant")
 st.markdown(
-    "Enter a **public** GitHub Pull Request URL to generate an AI-powered change summary."
+    "Enter a **public** GitHub Pull Request URL to generate an AI-powered "
+    "change summary and risk analysis."
 )
 
 # ---------------------------------------------------------------------------
@@ -61,6 +63,9 @@ if analyze_clicked:
     if not pr_url.strip():
         st.warning("Please enter a GitHub PR URL.")
     else:
+        summary_result = None
+        risk_result = None
+
         try:
             # ---------- Phase 1: Parse URL ----------
             with st.spinner("Parsing PR URL..."):
@@ -84,13 +89,20 @@ if analyze_clicked:
             with st.spinner("Building diff context..."):
                 diff_context = build_diff_context(changed_files)
 
+            # ---------- Shared LLM config ----------
+            llm_config = load_llm_config_from_env()
+
             # ---------- Phase 5: Generate summary ----------
-            with st.spinner("Generating AI summary..."):
-                llm_config = load_llm_config_from_env()
+            with st.spinner("Generating change summary..."):
                 summary_result = generate_pr_summary(pr_info, diff_context, llm_config)
 
-            # ====== Display results ======
+            # ---------- Phase 6: Analyze risks ----------
+            with st.spinner("Analyzing risks..."):
+                risk_result = analyze_pr_risks(pr_info, diff_context, llm_config)
+
             st.success("Analysis complete!")
+
+            # ====== Display results ======
 
             # -- PR Info --
             st.subheader("PR Overview")
@@ -122,7 +134,7 @@ if analyze_clicked:
                         "Changes": f.changes,
                         "Has Patch": "Yes" if f.patch else "No",
                     }
-                    for f in changed_files[:50]  # show first 50
+                    for f in changed_files[:50]
                 ]
                 st.dataframe(file_data, use_container_width=True, hide_index=True)
                 if len(changed_files) > 50:
@@ -141,31 +153,85 @@ if analyze_clicked:
                 st.info(w)
 
             # -- AI Summary --
-            st.subheader("AI Change Summary")
-            st.markdown(summary_result.summary)
+            if summary_result:
+                st.subheader("AI Change Summary")
+                st.markdown(summary_result.summary)
 
-            col_l, col_r = st.columns(2)
-            with col_l:
-                st.markdown("**Main Changes**")
-                if summary_result.main_changes:
-                    for item in summary_result.main_changes:
+                col_l, col_r = st.columns(2)
+                with col_l:
+                    st.markdown("**Main Changes**")
+                    if summary_result.main_changes:
+                        for item in summary_result.main_changes:
+                            st.markdown(f"- {item}")
+                    else:
+                        st.caption("None")
+                with col_r:
+                    st.markdown("**Affected Areas**")
+                    if summary_result.affected_areas:
+                        for item in summary_result.affected_areas:
+                            st.markdown(f"- {item}")
+                    else:
+                        st.caption("None")
+
+                st.markdown("**Uncertainties**")
+                if summary_result.uncertainties:
+                    for item in summary_result.uncertainties:
                         st.markdown(f"- {item}")
                 else:
                     st.caption("None")
-            with col_r:
-                st.markdown("**Affected Areas**")
-                if summary_result.affected_areas:
-                    for item in summary_result.affected_areas:
+
+            # ====== Risk Analysis ======
+            if risk_result:
+                st.subheader("Risk Analysis")
+
+                # Overall level
+                level = risk_result.overall_risk_level.capitalize()
+                if risk_result.overall_risk_level == "high":
+                    st.error(f"Overall Risk Level: **{level}**")
+                elif risk_result.overall_risk_level == "medium":
+                    st.warning(f"Overall Risk Level: **{level}**")
+                else:
+                    st.info(f"Overall Risk Level: **{level}**")
+
+                if not risk_result.risk_items:
+                    st.info(
+                        "No obvious risks were found by the model. "
+                        "Please still review the PR manually."
+                    )
+                else:
+                    severity_order = {"high": 0, "medium": 1, "low": 2}
+                    sorted_items = sorted(
+                        risk_result.risk_items,
+                        key=lambda r: severity_order.get(r.severity, 99),
+                    )
+
+                    for i, ri in enumerate(sorted_items, 1):
+                        sev_emoji = {"high": "🔴", "medium": "🟡", "low": "🟢"}.get(ri.severity, "⚪")
+                        with st.expander(
+                            f"Risk {i}: {sev_emoji} [{ri.severity.upper()}] {ri.risk_type} — {ri.file_path}"
+                        ):
+                            st.markdown(f"**File:** `{ri.file_path or 'N/A'}`")
+                            st.markdown(f"**Evidence:** {ri.evidence or 'N/A'}")
+                            st.markdown(f"**Explanation:** {ri.explanation or 'N/A'}")
+                            st.markdown(f"**Impact:** {ri.impact or 'N/A'}")
+                            st.markdown(f"**Suggestion:** {ri.suggestion or 'N/A'}")
+                            st.caption(
+                                f"Confidence: {ri.confidence} | "
+                                f"Need human check: {'Yes' if ri.need_human_check else 'No'}"
+                            )
+
+                # Limitations
+                st.markdown("**Limitations**")
+                if risk_result.limitations:
+                    for item in risk_result.limitations:
                         st.markdown(f"- {item}")
                 else:
                     st.caption("None")
 
-            st.markdown("**Uncertainties**")
-            if summary_result.uncertainties:
-                for item in summary_result.uncertainties:
-                    st.markdown(f"- {item}")
-            else:
-                st.caption("None")
+                st.info(
+                    "Risk analysis is generated from PR diff only and may miss "
+                    "repository-level context. Please verify before using it as review feedback."
+                )
 
         except PRUrlParseError as e:
             st.error(f"Unable to parse PR URL: {e}")
@@ -180,6 +246,8 @@ if analyze_clicked:
             st.error(f"LLM API error: {e}")
         except SummaryAnalyzerError as e:
             st.error(f"Summary generation error: {e}")
+        except RiskAnalyzerError as e:
+            st.error(f"Risk analysis error: {e}")
         except ValueError as e:
             st.error(f"Input error: {e}")
         except Exception as e:
