@@ -5,7 +5,7 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
-from src.llm_client import LLMConfig, chat_completion
+from src.llm_client import LLMConfig, LLMResponseError, chat_completion
 
 
 # ---------------------------------------------------------------------------
@@ -76,7 +76,13 @@ information and diff context to identify potential risks. Do not supplement \
 with knowledge outside the provided context. Do not judge whether the PR \
 should be merged. Do not force risk generation — if no clear risks, return \
 empty risk_items. Every risk must contain evidence. Annotate confidence and \
-need_human_check for each item. Return only valid JSON.
+need_human_check for each item.
+
+Return only valid JSON. Do not return empty content.
+Do not include markdown outside the JSON.
+Do not include explanations before or after the JSON.
+If no obvious risks are found, return:
+{"overall_risk_level":"low","risk_items":[],"limitations":["No obvious risks were found from the provided diff."]}
 
 Use exactly these top-level keys: overall_risk_level, risk_items, limitations.
 
@@ -144,19 +150,41 @@ def build_risk_messages(pr_info, diff_context) -> list[dict[str, str]]:
 _FENCE_PATTERN = re.compile(r"```(?:json)?\s*([\s\S]*?)```", re.IGNORECASE)
 
 
-def parse_risk_response(content: str) -> RiskAnalysisResult:
+def _build_empty_content_fallback(raw_response: str = "") -> RiskAnalysisResult:
+    return RiskAnalysisResult(
+        overall_risk_level="low",
+        risk_items=[],
+        limitations=[
+            "Model returned empty content during risk analysis.",
+            "Analysis is based only on PR diff and may miss repository-level context.",
+            "Please review the PR manually.",
+        ],
+        raw_response=raw_response,
+    )
+
+
+def _is_empty_content_error(exc: Exception) -> bool:
+    msg = str(exc).lower()
+    return ("empty content" in msg or "returned empty content" in msg)
+
+
+def parse_risk_response(content: str, allow_empty_fallback: bool = False) -> RiskAnalysisResult:
     """Parse model JSON output into RiskAnalysisResult.
 
     Args:
         content: Raw model output string.
+        allow_empty_fallback: If True, return fallback for empty content instead of raising.
 
     Returns:
         RiskAnalysisResult with parsed fields.
 
     Raises:
-        RiskResponseParseError: If parsing fails or required fields are missing.
+        RiskResponseParseError: If parsing fails or required fields are missing
+            (and allow_empty_fallback is False or content is not empty).
     """
     if not content or not content.strip():
+        if allow_empty_fallback:
+            return _build_empty_content_fallback(content)
         raise RiskResponseParseError("Model returned empty content.")
 
     text = content.strip()
@@ -269,6 +297,10 @@ def _to_bool(value) -> bool:
 def analyze_pr_risks(pr_info, diff_context, llm_config: LLMConfig) -> RiskAnalysisResult:
     """Analyze PR diff for potential risks using the LLM.
 
+    If the model returns empty content, a retry is attempted once. If the
+    retry also returns empty content, a fallback low-risk result is returned
+    instead of raising an error.
+
     Args:
         pr_info: PRInfo object.
         diff_context: DiffContext object.
@@ -278,9 +310,46 @@ def analyze_pr_risks(pr_info, diff_context, llm_config: LLMConfig) -> RiskAnalys
         RiskAnalysisResult with parsed risk items.
 
     Raises:
-        RiskAnalyzerError / RiskResponseParseError: On parse failures.
-        LLMClientError / subclasses: On API failures (passed through).
+        RiskAnalyzerError / RiskResponseParseError: On non-empty-content parse failures.
+        LLMClientError / subclasses: On API failures (except empty content).
     """
     messages = build_risk_messages(pr_info, diff_context)
-    response = chat_completion(messages, llm_config)
-    return parse_risk_response(response.content)
+
+    def _try_analyze(msgs):
+        try:
+            response = chat_completion(msgs, llm_config)
+            if not response.content or not response.content.strip():
+                return None  # signal retry
+            return parse_risk_response(response.content, allow_empty_fallback=False)
+        except LLMResponseError as exc:
+            if _is_empty_content_error(exc):
+                return None
+            raise
+        except RiskResponseParseError as exc:
+            if _is_empty_content_error(exc):
+                return None
+            raise
+
+    result = _try_analyze(messages)
+    if result is not None:
+        return result
+
+    # Retry once with explicit instruction
+    retry_messages = messages + [
+        {
+            "role": "user",
+            "content": (
+                "The previous response was empty. Return only the required JSON object. "
+                "If no obvious risk is found, return "
+                '{"overall_risk_level":"low","risk_items":[],'
+                '"limitations":["No obvious risks were found from the provided diff."]}'
+            ),
+        }
+    ]
+    try:
+        retry_response = chat_completion(retry_messages, llm_config)
+        return parse_risk_response(retry_response.content, allow_empty_fallback=True)
+    except (LLMResponseError, RiskResponseParseError) as exc:
+        if _is_empty_content_error(exc):
+            return _build_empty_content_fallback("")
+        raise
