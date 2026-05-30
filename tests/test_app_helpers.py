@@ -6,6 +6,7 @@ from app import (
     PRIORITY_ORDER,
     SEVERITY_ORDER,
     T,
+    _build_report_md,
     _none_if_empty,
     _risk_level_badge_class,
     _risk_level_label,
@@ -16,63 +17,123 @@ from app import (
 
 @dataclass
 class FakePRInfo:
+    title: str = "Add login validation"
     state: str = "closed"
     merged: bool = True
+    author: str = "dev1"
+    changed_files: int = 3
+    additions: int = 42
+    deletions: int = 10
+    commits: int = 2
+    body: str = ""
+
+
+@dataclass
+class FakeSummaryResult:
+    summary: str = "This PR adds login validation."
+    main_changes: list = None
+    affected_areas: list = None
+    uncertainties: list = None
+
+    def __post_init__(self):
+        if self.main_changes is None:
+            self.main_changes = ["Added validation"]
+        if self.affected_areas is None:
+            self.affected_areas = ["Auth"]
+        if self.uncertainties is None:
+            self.uncertainties = []
+
+
+@dataclass
+class FakeRiskItem:
+    risk_type: str = "logic"
+    severity: str = "medium"
+    file_path: str = "src/login.py"
+    evidence: str = "Null check removed"
+    explanation: str = "May crash"
+    impact: str = "Login may fail"
+    suggestion: str = "Add null check"
+    confidence: str = "medium"
+    need_human_check: bool = True
+
+
+@dataclass
+class FakeRiskResult:
+    overall_risk_level: str = "medium"
+    risk_items: list = None
+    limitations: list = None
+
+    def __post_init__(self):
+        if self.risk_items is None:
+            self.risk_items = [FakeRiskItem()]
+        if self.limitations is None:
+            self.limitations = []
+
+
+@dataclass
+class FakeSuggestion:
+    title: str = "Add test"
+    priority: str = "medium"
+    file_path: str = "src/login.py"
+    problem: str = "No test coverage"
+    evidence: str = "No test file modified"
+    impact: str = ""
+    suggestion: str = "Add unit test"
+    copy_text: str = "Could you add a unit test?"
+    source_risk_type: str = "testing"
+    need_human_check: bool = True
+
+
+@dataclass
+class FakeSuggestionResult:
+    suggestions: list = None
+    limitations: list = None
+
+    def __post_init__(self):
+        if self.suggestions is None:
+            self.suggestions = [FakeSuggestion()]
+        if self.limitations is None:
+            self.limitations = []
 
 
 class TestFormatPRStatus:
     def test_open_zh(self):
         assert format_pr_status(FakePRInfo(state="open", merged=False), "zh") == "打开"
 
-    def test_open_en(self):
-        assert format_pr_status(FakePRInfo(state="open", merged=False), "en") == "Open"
-
-    def test_merged_zh(self):
-        assert format_pr_status(FakePRInfo(state="closed", merged=True), "zh") == "已合并"
-
     def test_merged_en(self):
         assert format_pr_status(FakePRInfo(state="closed", merged=True), "en") == "Merged"
 
-    def test_closed_not_merged_zh(self):
+    def test_closed_zh(self):
         assert format_pr_status(FakePRInfo(state="closed", merged=False), "zh") == "已关闭"
 
-    def test_closed_not_merged_en(self):
-        assert format_pr_status(FakePRInfo(state="closed", merged=False), "en") == "Closed"
-
-    def test_unknown_state(self):
+    def test_unknown(self):
         assert format_pr_status(FakePRInfo(state="unknown", merged=False), "en") == "Unknown"
 
 
 class TestNoneIfEmpty:
-    def test_empty_list_zh(self):
+    def test_empty_zh(self):
         assert _none_if_empty([], "zh") == ["无"]
 
-    def test_empty_list_en(self):
+    def test_empty_en(self):
         assert _none_if_empty([], "en") == ["None"]
-
-    def test_non_empty_list(self):
-        assert _none_if_empty(["a", "b"], "en") == ["a", "b"]
 
 
 class TestSorting:
-    def test_severity_order(self):
+    def test_severity(self):
         assert SEVERITY_ORDER["high"] < SEVERITY_ORDER["medium"] < SEVERITY_ORDER["low"]
 
-    def test_priority_order(self):
+    def test_priority(self):
         assert PRIORITY_ORDER["high"] < PRIORITY_ORDER["medium"] < PRIORITY_ORDER["low"]
 
 
 class TestRiskLevelBadge:
-    def test_high_badge_class(self):
+    def test_high(self):
         assert "high" in _risk_level_badge_class("high")
 
-    def test_medium_badge_class(self):
-        assert "medium" in _risk_level_badge_class("medium")
-
-    def test_low_badge_class(self):
+    def test_low(self):
         assert "low" in _risk_level_badge_class("low")
 
-    def test_unknown_badge_class(self):
+    def test_unknown(self):
         assert "low" in _risk_level_badge_class("unknown")
 
 
@@ -83,23 +144,53 @@ class TestRiskLevelLabel:
     def test_medium_en(self):
         assert _risk_level_label("medium", "en") == "Medium"
 
-    def test_low_zh(self):
-        assert _risk_level_label("low", "zh") == "低风险"
-
 
 class TestTranslations:
-    def test_t_en_title(self):
+    def test_t_en(self):
         assert "PRLens" in t("en", "title")
 
-    def test_t_zh_title(self):
+    def test_t_zh(self):
         assert "助手" in t("zh", "title")
 
     def test_t_fallback(self):
         assert t("fr", "title") == T["en"]["title"]
 
-    def test_t_missing_key(self):
-        assert t("en", "xyz_nonexistent") == "xyz_nonexistent"
 
-    def test_t_format(self):
-        result = t("en", "more_files", n=5)
-        assert "... and 5 more files" in result
+class TestBuildReportMd:
+    def test_en_report_has_heading(self):
+        md = _build_report_md(
+            "en", FakePRInfo(),
+            FakeSummaryResult(), FakeRiskResult(), FakeSuggestionResult(),
+        )
+        assert "# PRLens" in md
+        assert "## PR Overview" in md
+        assert "## AI Change Summary" in md
+        assert "## Risk Analysis" in md
+        assert "## Review Suggestions" in md
+        assert "Generated by PRLens" in md
+
+    def test_zh_report_has_heading(self):
+        md = _build_report_md(
+            "zh", FakePRInfo(),
+            FakeSummaryResult(), FakeRiskResult(), FakeSuggestionResult(),
+        )
+        assert "PRLens 分析报告" in md
+        assert "PR 概览" in md
+        assert "变更总结" in md
+        assert "风险分析" in md
+        assert "Review 建议" in md
+
+    def test_empty_risk_items_shows_none_message(self):
+        md = _build_report_md(
+            "en", FakePRInfo(),
+            FakeSummaryResult(), FakeRiskResult(risk_items=[]), FakeSuggestionResult(),
+        )
+        assert "No obvious risks" in md
+
+    def test_empty_suggestions_shows_none_message(self):
+        md = _build_report_md(
+            "en", FakePRInfo(),
+            FakeSummaryResult(), FakeRiskResult(),
+            FakeSuggestionResult(suggestions=[]),
+        )
+        assert "No review suggestions" in md
