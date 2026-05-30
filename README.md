@@ -35,6 +35,7 @@ PRLens 是一个面向开发者的 AI PR Review 助手。用户输入 GitHub PR 
 - PR9: Minimal Streamlit demo added
 - PR10: Risk analyzer added
 - PR11: Risk analysis integrated into demo
+- PR12: Review suggestion generator added
 
 ## Run Tests
 
