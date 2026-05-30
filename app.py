@@ -6,8 +6,6 @@ diff processing, LLM summary, risk analysis, and review suggestions.
 """
 
 import os
-import io
-import json
 import streamlit as st
 from dotenv import load_dotenv
 
@@ -33,7 +31,7 @@ from src.review_suggestion import (
 load_dotenv()
 
 # ---------------------------------------------------------------------------
-# CSS — hide Streamlit chrome, keep product styling
+# CSS
 # ---------------------------------------------------------------------------
 
 CSS = """
@@ -41,14 +39,13 @@ CSS = """
 #MainMenu { display: none !important; }
 header[data-testid="stHeader"] { display: none !important; }
 footer { display: none !important; }
-section[data-testid="stSidebar"] { display: none !important; }
 [data-testid="stToolbar"] { display: none !important; }
 [data-testid="stStatusWidget"] { display: none !important; }
 button[title="View fullscreen"] { display: none !important; }
 
 .block-container { max-width: 1100px; padding-top: 1.5rem; padding-bottom: 3rem; }
 
-.prlens-hero { padding: 0.5rem 0 0.5rem 0; }
+.prlens-hero { padding: 0.5rem 0 0.25rem 0; }
 .prlens-hero h1 { font-size: 2rem; font-weight: 700; margin: 0; }
 
 .prlens-card {
@@ -67,7 +64,8 @@ button[title="View fullscreen"] { display: none !important; }
 .prlens-badge-medium { background: #fffbeb; color: #d97706; }
 .prlens-badge-low { background: #f0fdf4; color: #16a34a; }
 
-.prlens-lang-row { margin: 0.5rem 0 1rem 0; }
+section[data-testid="stSidebar"] { background: #f8fafc; }
+section[data-testid="stSidebar"] .stRadio label { font-size: 0.9rem; }
 </style>
 """
 
@@ -81,12 +79,13 @@ T: dict[str, dict[str, str]] = {
     "zh": {
         "title": "PRLens: AI PR Review 助手",
         "subtitle": "输入 GitHub Pull Request 链接，快速生成变更总结、风险分析和 Review 建议。",
-        "lang_label": "界面语言",
         "pr_url_label": "GitHub PR 链接",
         "pr_url_placeholder": "请输入公开 GitHub PR 链接，例如：https://github.com/owner/repo/pull/123",
         "analyze_btn": "开始分析",
+        "clear_btn": "清空结果",
         "export_btn": "导出分析报告",
         "export_filename": "prlens_report.md",
+        "lang_stale_notice": "当前分析结果可能来自切换前的语言设置。如需生成当前语言版本，请重新点击「开始分析」。",
         "export_heading": "# PRLens 分析报告",
         "export_overview": "## PR 概览",
         "export_title_row": "- 标题: {title}",
@@ -97,7 +96,7 @@ T: dict[str, dict[str, str]] = {
         "export_deletions_row": "- 删除行: -{deletions}",
         "export_commits_row": "- 提交数: {commits}",
         "export_summary_title": "## AI 变更总结",
-        "export_summary": "### 变更总结",
+        "export_summary_s": "### 变更总结",
         "export_main_changes": "### 主要变更",
         "export_affected_areas": "### 影响范围",
         "export_uncertainties": "### 不确定项",
@@ -192,12 +191,13 @@ T: dict[str, dict[str, str]] = {
     "en": {
         "title": "PRLens: AI PR Review Assistant",
         "subtitle": "Paste a GitHub Pull Request URL to generate a change summary, risk analysis, and review suggestions.",
-        "lang_label": "Language",
         "pr_url_label": "GitHub PR URL",
         "pr_url_placeholder": "Enter a public GitHub PR URL, e.g. https://github.com/owner/repo/pull/123",
         "analyze_btn": "Analyze PR",
-        "export_btn": "Download Report",
+        "clear_btn": "Clear Results",
+        "export_btn": "Export Report",
         "export_filename": "prlens_report.md",
+        "lang_stale_notice": "The current analysis may have been generated with the previous language setting. Click Analyze PR again to regenerate it in the selected language.",
         "export_heading": "# PRLens Analysis Report",
         "export_overview": "## PR Overview",
         "export_title_row": "- Title: {title}",
@@ -208,7 +208,7 @@ T: dict[str, dict[str, str]] = {
         "export_deletions_row": "- Deletions: -{deletions}",
         "export_commits_row": "- Commits: {commits}",
         "export_summary_title": "## AI Change Summary",
-        "export_summary": "### Summary",
+        "export_summary_s": "### Summary",
         "export_main_changes": "### Main Changes",
         "export_affected_areas": "### Affected Areas",
         "export_uncertainties": "### Uncertainties",
@@ -331,9 +331,7 @@ def format_pr_status(pr_info, lang: str) -> str:
 
 
 def _none_if_empty(items, lang: str):
-    if not items:
-        return [t(lang, "none")]
-    return items
+    return items if items else [t(lang, "none")]
 
 
 def _risk_level_badge_class(level: str) -> str:
@@ -348,71 +346,135 @@ def _risk_level_label(level: str, lang: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Session state init
+# Report builder
 # ---------------------------------------------------------------------------
 
-def _cache_key(lang: str) -> str:
-    return f"analysis_cache_{lang}"
+def _build_report_md(lang: str, pr_info, summary_result, risk_result, review_suggestions_result) -> str:
+    lines = [t(lang, "export_heading"), ""]
+    lines.append(t(lang, "export_overview"))
+    lines.append(t(lang, "export_title_row", title=pr_info.title))
+    lines.append(t(lang, "export_status_row", status=format_pr_status(pr_info, lang)))
+    lines.append(t(lang, "export_author_row", author=pr_info.author))
+    lines.append(t(lang, "export_files_row", files=pr_info.changed_files))
+    lines.append(t(lang, "export_additions_row", additions=pr_info.additions))
+    lines.append(t(lang, "export_deletions_row", deletions=pr_info.deletions))
+    lines.append(t(lang, "export_commits_row", commits=pr_info.commits))
+    lines.append("")
 
+    if summary_result:
+        lines.append(t(lang, "export_summary_title"))
+        lines.append(t(lang, "export_summary_s"))
+        lines.append(summary_result.summary)
+        lines.append("")
+        lines.append(t(lang, "export_main_changes"))
+        for item in _none_if_empty(summary_result.main_changes, lang):
+            lines.append(f"- {item}")
+        lines.append("")
+        lines.append(t(lang, "export_affected_areas"))
+        for item in _none_if_empty(summary_result.affected_areas, lang):
+            lines.append(f"- {item}")
+        lines.append("")
+        lines.append(t(lang, "export_uncertainties"))
+        for item in _none_if_empty(summary_result.uncertainties, lang):
+            lines.append(f"- {item}")
+        lines.append("")
 
-def _get_cache(lang: str) -> dict | None:
-    return st.session_state.get(_cache_key(lang))
+    if risk_result:
+        lines.append(t(lang, "export_risk_title"))
+        lines.append(t(lang, "export_risk_level", level=_risk_level_label(risk_result.overall_risk_level, lang)))
+        lines.append("")
+        if risk_result.risk_items:
+            lines.append(t(lang, "export_risk_items"))
+            for i, ri in enumerate(risk_result.risk_items, 1):
+                lines.append(f"**{i}.** [{ri.severity}] {ri.risk_type} - `{ri.file_path}`")
+                lines.append(f"- {t(lang, 'evidence_label')}: {ri.evidence}")
+                lines.append(f"- {t(lang, 'explanation_label')}: {ri.explanation}")
+                lines.append(f"- {t(lang, 'impact_label')}: {ri.impact or 'N/A'}")
+                lines.append(f"- {t(lang, 'suggestion_label')}: {ri.suggestion}")
+                lines.append("")
+        else:
+            lines.append(t(lang, "export_risk_none"))
+            lines.append("")
+        if risk_result.limitations:
+            lines.append(t(lang, "export_risk_limitations"))
+            for item in risk_result.limitations:
+                lines.append(f"- {item}")
+            lines.append("")
 
+    if review_suggestions_result:
+        lines.append(t(lang, "export_sug_title"))
+        if review_suggestions_result.suggestions:
+            for i, sug in enumerate(review_suggestions_result.suggestions, 1):
+                lines.append(f"**{i}.** [{sug.priority}] {sug.title}")
+                lines.append(f"- {t(lang, 'file_label')}: `{sug.file_path}`")
+                lines.append(f"- {t(lang, 'sug_problem')}: {sug.problem}")
+                lines.append(f"- {t(lang, 'evidence_label')}: {sug.evidence}")
+                lines.append(f"- {t(lang, 'suggestion_label')}: {sug.suggestion}")
+                lines.append("")
+        else:
+            lines.append(t(lang, "export_sug_none"))
+            lines.append("")
 
-def _set_cache(lang: str, data: dict):
-    st.session_state[_cache_key(lang)] = data
+    lines.append(t(lang, "export_footer"))
+    return "\n".join(lines)
 
 
 # ---------------------------------------------------------------------------
-# Page config — sidebar collapsed
+# Page config
 # ---------------------------------------------------------------------------
 
 st.set_page_config(
     page_title="PRLens", page_icon="🔍", layout="wide",
-    initial_sidebar_state="collapsed",
+    initial_sidebar_state="expanded",
 )
 
 # ---------------------------------------------------------------------------
-# Hero
+# Sidebar — settings only
 # ---------------------------------------------------------------------------
 
-st.markdown(
-    f'<div class="prlens-hero"><h1>{t("en", "title")}</h1></div>',
-    unsafe_allow_html=True,
-)
+with st.sidebar:
+    st.markdown("### 设置 / Settings")
 
-st.markdown(f'<p class="prlens-muted">{t("en", "subtitle")}</p>', unsafe_allow_html=True)
+    lang_choice = st.radio(
+        "语言 / Language",
+        ["中文", "English"],
+        key="sidebar_lang",
+    )
+    lang = "zh" if lang_choice == "中文" else "en"
+    output_language = "zh" if lang == "zh" else "en"
 
-lang_choice = st.selectbox(
-    "语言 / Language", ["中文", "English"],
-    key="lang_select",
-)
-lang = "zh" if lang_choice == "中文" else "en"
-output_language = "zh" if lang == "zh" else "en"
+    st.divider()
+
+    if st.button(t(lang, "clear_btn"), use_container_width=True):
+        st.session_state.pop("analysis_result", None)
+        st.session_state.pop("result_lang", None)
+        st.rerun()
 
 # ---------------------------------------------------------------------------
-# Input card
+# Main — hero
+# ---------------------------------------------------------------------------
+
+st.markdown(f'<div class="prlens-hero"><h1>{t(lang, "title")}</h1></div>', unsafe_allow_html=True)
+st.markdown(f'<p class="prlens-muted">{t(lang, "subtitle")}</p>', unsafe_allow_html=True)
+
+# ---------------------------------------------------------------------------
+# Main — input
 # ---------------------------------------------------------------------------
 
 st.markdown('<div class="prlens-card">', unsafe_allow_html=True)
 pr_url = st.text_input(
     t(lang, "pr_url_label"),
     placeholder=t(lang, "pr_url_placeholder"),
+    key="pr_url_input",
     label_visibility="visible",
 )
-c1, c2 = st.columns([1, 4])
-with c1:
+cc1, cc2 = st.columns([1, 4])
+with cc1:
     analyze_clicked = st.button(t(lang, "analyze_btn"), type="primary", use_container_width=True)
 st.markdown('</div>', unsafe_allow_html=True)
 
 # ---------------------------------------------------------------------------
-# Show cached result on language switch (no re-analyze)
-# ---------------------------------------------------------------------------
-
-cached = _get_cache(lang)
-
-# ---------------------------------------------------------------------------
-# Analyze handler
+# Analyze
 # ---------------------------------------------------------------------------
 
 if analyze_clicked:
@@ -467,128 +529,40 @@ if analyze_clicked:
                 status.write(f"✓ {t(lang, 'ph_suggestions')}")
                 status.update(label=t(lang, "ph_done"), state="complete")
 
-            # Cache the result under current language
-            _set_cache(lang, {
+            st.session_state["analysis_result"] = {
                 "pr_info": pr_info,
                 "changed_files": changed_files,
                 "diff_context": diff_context,
                 "summary_result": summary_result,
                 "risk_result": risk_result,
                 "review_suggestions_result": review_suggestions_result,
-            })
-            cached = _get_cache(lang)
+            }
+            st.session_state["result_lang"] = output_language
 
         except PRUrlParseError:
             st.error(t(lang, "err_parse"))
-            cached = None
         except GitHubClientError as e:
             st.error(t(lang, "err_github") + f"\n\n({e})")
-            cached = None
         except LLMConfigError:
             st.error(t(lang, "err_llm_config"))
-            cached = None
         except LLMClientError as e:
             st.error(t(lang, "err_llm") + f"\n\n({e})")
-            cached = None
         except SummaryAnalyzerError as e:
             st.error(t(lang, "err_summary") + f"\n\n({e})")
-            cached = None
         except RiskAnalyzerError as e:
             st.error(t(lang, "err_risk") + f"\n\n({e})")
-            cached = None
         except ReviewSuggestionError as e:
             st.error(t(lang, "err_suggestion") + f"\n\n({e})")
-            cached = None
         except ValueError as e:
             st.error(t(lang, "err_input") + f"\n\n({e})")
-            cached = None
         except Exception as e:
             st.error(t(lang, "err_unexpected") + f"\n\n({e})")
-            cached = None
-
-
-# ---------------------------------------------------------------------------
-# Report builder (export helper)
-# ---------------------------------------------------------------------------
-
-def _build_report_md(lang: str, pr_info, summary_result, risk_result, review_suggestions_result) -> str:
-    lines = [t(lang, "export_heading"), ""]
-
-    lines.append(t(lang, "export_overview"))
-    lines.append(t(lang, "export_title_row", title=pr_info.title))
-    lines.append(t(lang, "export_status_row", status=format_pr_status(pr_info, lang)))
-    lines.append(t(lang, "export_author_row", author=pr_info.author))
-    lines.append(t(lang, "export_files_row", files=pr_info.changed_files))
-    lines.append(t(lang, "export_additions_row", additions=pr_info.additions))
-    lines.append(t(lang, "export_deletions_row", deletions=pr_info.deletions))
-    lines.append(t(lang, "export_commits_row", commits=pr_info.commits))
-    lines.append("")
-
-    if summary_result:
-        lines.append(t(lang, "export_summary_title"))
-        lines.append(t(lang, "export_summary"))
-        lines.append(summary_result.summary)
-        lines.append("")
-        lines.append(t(lang, "export_main_changes"))
-        for item in _none_if_empty(summary_result.main_changes, lang):
-            lines.append(f"- {item}")
-        lines.append("")
-        lines.append(t(lang, "export_affected_areas"))
-        for item in _none_if_empty(summary_result.affected_areas, lang):
-            lines.append(f"- {item}")
-        lines.append("")
-        lines.append(t(lang, "export_uncertainties"))
-        for item in _none_if_empty(summary_result.uncertainties, lang):
-            lines.append(f"- {item}")
-        lines.append("")
-
-    if risk_result:
-        lines.append(t(lang, "export_risk_title"))
-        level = _risk_level_label(risk_result.overall_risk_level, lang)
-        lines.append(t(lang, "export_risk_level", level=level))
-        lines.append("")
-        if risk_result.risk_items:
-            lines.append(t(lang, "export_risk_items"))
-            for i, ri in enumerate(risk_result.risk_items, 1):
-                lines.append(f"**{i}.** [{ri.severity}] {ri.risk_type} - `{ri.file_path}`")
-                lines.append(f"- Evidence: {ri.evidence}")
-                lines.append(f"- Explanation: {ri.explanation}")
-                lines.append(f"- Impact: {ri.impact or 'N/A'}")
-                lines.append(f"- Suggestion: {ri.suggestion}")
-                lines.append(f"- Confidence: {ri.confidence} | Need human check: {'Yes' if ri.need_human_check else 'No'}")
-                lines.append("")
-        else:
-            lines.append(t(lang, "export_risk_none"))
-            lines.append("")
-        if risk_result.limitations:
-            lines.append(t(lang, "export_risk_limitations"))
-            for item in risk_result.limitations:
-                lines.append(f"- {item}")
-            lines.append("")
-
-    if review_suggestions_result:
-        lines.append(t(lang, "export_sug_title"))
-        if review_suggestions_result.suggestions:
-            for i, sug in enumerate(review_suggestions_result.suggestions, 1):
-                lines.append(f"**{i}.** [{sug.priority}] {sug.title}")
-                lines.append(f"- File: `{sug.file_path}`")
-                lines.append(f"- Problem: {sug.problem}")
-                lines.append(f"- Evidence: {sug.evidence}")
-                lines.append(f"- Suggestion: {sug.suggestion}")
-                lines.append(f"- Copyable Comment: {sug.copy_text}")
-                lines.append("")
-        else:
-            lines.append(t(lang, "export_sug_none"))
-            lines.append("")
-
-    lines.append(t(lang, "export_footer"))
-    return "\n".join(lines)
-
 
 # ====================================================================
-# Results display — from cache or live
+# Results display
 # ====================================================================
 
+cached = st.session_state.get("analysis_result")
 if cached:
     pr_info = cached["pr_info"]
     changed_files = cached["changed_files"]
@@ -597,12 +571,13 @@ if cached:
     risk_result = cached["risk_result"]
     review_suggestions_result = cached["review_suggestions_result"]
 
-    # ---------- export button ----------
-    col_exp, _ = st.columns([1, 4])
-    with col_exp:
-        report_md = _build_report_md(
-            lang, pr_info, summary_result, risk_result, review_suggestions_result
-        )
+    result_lang = st.session_state.get("result_lang", lang)
+    if result_lang != output_language:
+        st.info(t(lang, "lang_stale_notice"))
+
+    # Export button — only when results exist
+    with st.sidebar:
+        report_md = _build_report_md(lang, pr_info, summary_result, risk_result, review_suggestions_result)
         st.download_button(
             t(lang, "export_btn"),
             data=report_md,
@@ -650,7 +625,7 @@ if cached:
         dcols[1].metric(t(lang, "included"), diff_context.included_files)
         dcols[2].metric(t(lang, "skipped"), diff_context.skipped_files)
         dcols[3].metric(t(lang, "truncated"), diff_context.truncated_files)
-        dcols[4].metric(t(lang, "chars"), f"{diff_context.original_total_chars} → {diff_context.processed_total_chars}")
+        dcols[4].metric(t(lang, "chars"), f"{diff_context.original_total_chars} -> {diff_context.processed_total_chars}")
         if diff_context.was_truncated:
             st.warning(t(lang, "truncated_warning"))
         if diff_context.warnings:
@@ -694,7 +669,7 @@ if cached:
                     f'<span class="{_risk_level_badge_class(ri.severity)}">'
                     f'{_risk_level_label(ri.severity, lang)}</span>'
                 )
-                with st.expander(f"{t(lang, 'risk_item_label')} {i}: {ri.risk_type} — {ri.file_path}  {sev_badge}"):
+                with st.expander(f"{t(lang, 'risk_item_label')} {i}: {ri.risk_type} - {ri.file_path}  {sev_badge}"):
                     st.markdown(f"**{t(lang, 'file_label')}:** `{ri.file_path or t(lang, 'na')}`")
                     st.markdown(f"**{t(lang, 'evidence_label')}:** {ri.evidence or t(lang, 'na')}")
                     st.markdown(f"**{t(lang, 'explanation_label')}:** {ri.explanation or t(lang, 'na')}")
@@ -738,6 +713,9 @@ if cached:
         else:
             st.caption(f"{t(lang, 'limitations_label')}: {t(lang, 'none')}")
 
+# ---------------------------------------------------------------------------
+# Footer
+# ---------------------------------------------------------------------------
 
 st.divider()
 st.markdown(f'<p class="prlens-muted" style="font-size:0.82rem;">{t(lang, "footer")}</p>', unsafe_allow_html=True)
