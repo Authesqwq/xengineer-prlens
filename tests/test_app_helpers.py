@@ -13,8 +13,10 @@ from app import (
     _mode_display_name,
     _none_if_empty,
     _risk_label,
+    build_analysis_steps,
     format_elapsed_time,
     format_pr_status,
+    render_progress_steps,
     t,
 )
 
@@ -231,3 +233,67 @@ class TestHistoryHelpers:
                      "analysis_mode": "standard"} for i in range(HISTORY_MAX + 5)]
         truncated = entries[:HISTORY_MAX]
         assert len(truncated) == 10
+
+
+class TestBuildAnalysisSteps:
+    def test_fast_zh_excludes_risk_and_suggestions(self):
+        steps = build_analysis_steps("fast", "zh")
+        keys = [s["key"] for s in steps]
+        assert "risk" not in keys
+        assert "suggestions" not in keys
+        assert "summary" in keys
+
+    def test_standard_zh_includes_risk_excludes_suggestions(self):
+        steps = build_analysis_steps("standard", "zh")
+        keys = [s["key"] for s in steps]
+        assert "risk" in keys
+        assert "suggestions" not in keys
+
+    def test_full_zh_includes_all(self):
+        steps = build_analysis_steps("full", "zh")
+        keys = [s["key"] for s in steps]
+        assert "risk" in keys
+        assert "suggestions" in keys
+
+    def test_en_labels_are_english(self):
+        steps = build_analysis_steps("standard", "en")
+        assert steps[0]["label"] == "Parse PR URL"
+        assert "分析" not in steps[0]["label"]
+
+    def test_zh_labels_are_chinese(self):
+        steps = build_analysis_steps("standard", "zh")
+        assert "解析" in steps[0]["label"]
+
+
+class TestRenderProgressSteps:
+    def _steps(self):
+        return [
+            {"key": "parse_url", "label": "Parse URL"},
+            {"key": "fetch_pr", "label": "Fetch PR"},
+            {"key": "summary", "label": "Generate Summary"},
+        ]
+
+    def test_current_step_shows_arrow(self):
+        result = render_progress_steps(self._steps(), current_key="fetch_pr",
+                                       completed_keys={"parse_url"})
+        assert "▶" in result
+        assert "✓ Parse URL" in result
+        assert "○ Generate Summary" in result
+
+    def test_completed_step_shows_check(self):
+        result = render_progress_steps(self._steps(), completed_keys={"parse_url"})
+        assert "✓ Parse URL" in result
+
+    def test_skipped_step_shows_warning(self):
+        result = render_progress_steps(self._steps(), completed_keys={"parse_url", "fetch_pr"},
+                                       skipped_keys={"summary"})
+        assert "⚠ Generate Summary" in result
+
+    def test_failed_step_shows_cross(self):
+        result = render_progress_steps(self._steps(), completed_keys={"parse_url"},
+                                       failed_key="fetch_pr")
+        assert "✕ Fetch PR" in result
+
+    def test_pending_step_shows_circle(self):
+        result = render_progress_steps(self._steps())
+        assert "○ Parse URL" in result

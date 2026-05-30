@@ -134,6 +134,24 @@ T: dict[str, dict[str, str]] = {
         "ph_risk": "分析风险",
         "ph_suggestions": "生成建议",
         "ph_done": "分析完成",
+        "step_parse_url": "解析 PR 链接",
+        "step_fetch_pr": "获取 PR 信息",
+        "step_fetch_files": "获取变更文件",
+        "step_build_context": "构建 diff 上下文",
+        "step_summary": "生成变更总结",
+        "step_risk": "分析风险",
+        "step_suggestions": "生成 Review 建议",
+        "step_complete": "完成",
+        "step_running_parse": "正在解析 PR 链接...",
+        "step_running_fetch": "正在获取 PR 基本信息...",
+        "step_running_files": "正在获取变更文件和 patch...",
+        "step_running_context": "正在构建 diff 上下文...",
+        "step_running_summary": "正在生成变更总结...",
+        "step_running_risk": "正在分析潜在风险...",
+        "step_running_suggestions": "正在生成 Review 建议...",
+        "step_skipped_suggestions": "未发现具体风险项，跳过 Review 建议生成",
+        "step_failed_at": "分析在「{stage}」阶段失败，请检查输入、网络、GitHub Token 或 LLM 配置。",
+        "progress_title": "分析进度",
         "pr_overview": "PR 概览",
         "status": "状态",
         "author": "作者",
@@ -160,7 +178,9 @@ T: dict[str, dict[str, str]] = {
         "included": "已纳入",
         "skipped": "已跳过",
         "truncated": "已截断",
-        "chars": "字符数",
+        "chars": "字符数变化",
+        "chars_original": "原始字符数",
+        "chars_processed": "处理后字符数",
         "truncated_warning": "Diff 上下文已截断——本次分析仅覆盖部分文件。",
         "warnings_empty": "无",
         "summary_title": "AI 变更总结",
@@ -273,6 +293,24 @@ T: dict[str, dict[str, str]] = {
         "ph_risk": "Analyze risks",
         "ph_suggestions": "Generate suggestions",
         "ph_done": "Analysis complete",
+        "step_parse_url": "Parse PR URL",
+        "step_fetch_pr": "Fetch PR Info",
+        "step_fetch_files": "Fetch Changed Files",
+        "step_build_context": "Build Diff Context",
+        "step_summary": "Generate Change Summary",
+        "step_risk": "Analyze Risks",
+        "step_suggestions": "Generate Review Suggestions",
+        "step_complete": "Complete",
+        "step_running_parse": "Parsing PR URL...",
+        "step_running_fetch": "Fetching PR information...",
+        "step_running_files": "Fetching changed files and patches...",
+        "step_running_context": "Building diff context...",
+        "step_running_summary": "Generating change summary...",
+        "step_running_risk": "Analyzing potential risks...",
+        "step_running_suggestions": "Generating review suggestions...",
+        "step_skipped_suggestions": "No concrete risk items found. Skipping review suggestion generation.",
+        "step_failed_at": "Analysis failed at \"{stage}\". Please check the input, network, GitHub token, or LLM configuration.",
+        "progress_title": "Analysis Progress",
         "pr_overview": "PR Overview",
         "status": "Status",
         "author": "Author",
@@ -299,7 +337,9 @@ T: dict[str, dict[str, str]] = {
         "included": "Included",
         "skipped": "Skipped",
         "truncated": "Truncated",
-        "chars": "Chars",
+        "chars": "Character Count Change",
+        "chars_original": "Original Characters",
+        "chars_processed": "Processed Characters",
         "truncated_warning": "Diff context was truncated -- analysis covers partial files only.",
         "warnings_empty": "None",
         "summary_title": "AI Change Summary",
@@ -524,6 +564,54 @@ def _history_item_label(entry: dict, lang: str) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Progress steps
+# ---------------------------------------------------------------------------
+
+_STEP_KEYS_ALL = ["parse_url", "fetch_pr", "fetch_files", "build_context", "summary", "risk", "suggestions"]
+_STEP_KEY_LABEL = {
+    "parse_url": "step_parse_url", "fetch_pr": "step_fetch_pr",
+    "fetch_files": "step_fetch_files", "build_context": "step_build_context",
+    "summary": "step_summary", "risk": "step_risk", "suggestions": "step_suggestions",
+}
+_STEP_KEY_RUNNING = {
+    "parse_url": "step_running_parse", "fetch_pr": "step_running_fetch",
+    "fetch_files": "step_running_files", "build_context": "step_running_context",
+    "summary": "step_running_summary", "risk": "step_running_risk",
+    "suggestions": "step_running_suggestions",
+}
+_MODE_STEP_KEYS = {
+    "fast": ["parse_url", "fetch_pr", "fetch_files", "build_context", "summary"],
+    "standard": ["parse_url", "fetch_pr", "fetch_files", "build_context", "summary", "risk"],
+    "full": ["parse_url", "fetch_pr", "fetch_files", "build_context", "summary", "risk", "suggestions"],
+}
+
+
+def build_analysis_steps(analysis_mode: str, lang: str) -> list[dict]:
+    keys = _MODE_STEP_KEYS.get(analysis_mode, _MODE_STEP_KEYS["standard"])
+    return [{"key": k, "label": t(lang, _STEP_KEY_LABEL[k])} for k in keys]
+
+
+def render_progress_steps(steps, current_key=None, completed_keys=None,
+                          skipped_keys=None, failed_key=None) -> str:
+    completed_keys = set(completed_keys or [])
+    skipped_keys = set(skipped_keys or [])
+    lines = []
+    for step in steps:
+        key = step["key"]
+        if failed_key and key == failed_key:
+            lines.append(f'✕ {step["label"]}')
+        elif key in completed_keys:
+            lines.append(f'✓ {step["label"]}')
+        elif key == current_key:
+            lines.append(f'▶ {step["label"]}')
+        elif key in skipped_keys:
+            lines.append(f'⚠ {step["label"]}')
+        else:
+            lines.append(f'○ {step["label"]}')
+    return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
 # Page config
 # ---------------------------------------------------------------------------
 
@@ -644,53 +732,97 @@ if analyze_clicked:
         summary_result = None
         risk_result = None
         review_suggestions_result = None
+        parsed = None
+        github_token = None
+
+        steps = build_analysis_steps(analysis_mode, lang)
+        completed = set()
+        skipped = set()
+        current = None
+        failed = None
+
+        progress_placeholder = st.empty()
+        bar = st.progress(0)
+
+        def _update_progress():
+            progress_placeholder.markdown(
+                f"**{t(lang, 'progress_title')}**\n\n"
+                + render_progress_steps(steps, current, completed, skipped, failed)
+            )
+            total = len(steps)
+            done = len(completed) + len(skipped)
+            bar.progress(min(done / total, 1.0) if total else 0)
 
         try:
-            with st.status(t(lang, "ph_parsing"), expanded=True) as status:
-                status.write(f"✓ {t(lang, 'ph_parsing')}")
-                parsed = parse_github_pr_url(pr_url)
+            # Step: parse URL
+            current = "parse_url"
+            _update_progress()
+            parsed = parse_github_pr_url(pr_url)
+            completed.add("parse_url")
 
-                status.write(f"⏳ {t(lang, 'ph_fetching_info')}")
-                github_token = os.getenv("GITHUB_TOKEN") or None
-                pr_info = fetch_pr_info(parsed.owner, parsed.repo, parsed.pull_number, token=github_token)
-                status.write(f"✓ {t(lang, 'ph_fetching_info')}")
+            # Step: fetch PR info
+            current = "fetch_pr"
+            _update_progress()
+            github_token = os.getenv("GITHUB_TOKEN") or None
+            pr_info = fetch_pr_info(parsed.owner, parsed.repo, parsed.pull_number, token=github_token)
+            completed.add("fetch_pr")
 
-                status.write(f"⏳ {t(lang, 'ph_fetching_files')}")
-                changed_files = fetch_pr_files(parsed.owner, parsed.repo, parsed.pull_number, token=github_token)
-                status.write(f"✓ {t(lang, 'ph_fetching_files')}")
+            # Step: fetch files
+            current = "fetch_files"
+            _update_progress()
+            changed_files = fetch_pr_files(parsed.owner, parsed.repo, parsed.pull_number, token=github_token)
+            completed.add("fetch_files")
 
-                status.write(f"✓ {t(lang, 'ph_building_diff')}")
-                diff_context = build_diff_context(changed_files)
-                llm_config = load_llm_config_from_env()
+            # Step: build diff context
+            current = "build_context"
+            _update_progress()
+            diff_context = build_diff_context(changed_files)
+            completed.add("build_context")
 
-                status.write(f"⏳ {t(lang, 'ph_summary')}")
-                summary_result = generate_pr_summary(pr_info, diff_context, llm_config, output_language=output_language)
-                status.write(f"✓ {t(lang, 'ph_summary')}")
+            # LLM config
+            llm_config = load_llm_config_from_env()
 
-                if do_risk:
-                    status.write(f"⏳ {t(lang, 'ph_risk')}")
-                    risk_result = analyze_pr_risks(pr_info, diff_context, llm_config, output_language=output_language)
-                    status.write(f"✓ {t(lang, 'ph_risk')}")
+            # Step: summary
+            current = "summary"
+            _update_progress()
+            summary_result = generate_pr_summary(pr_info, diff_context, llm_config, output_language=output_language)
+            completed.add("summary")
 
-                if do_suggestions and risk_result and risk_result.risk_items:
-                    status.write(f"⏳ {t(lang, 'ph_suggestions')}")
+            # Step: risk
+            if do_risk:
+                current = "risk"
+                _update_progress()
+                risk_result = analyze_pr_risks(pr_info, diff_context, llm_config, output_language=output_language)
+                completed.add("risk")
+
+            # Step: suggestions
+            if do_suggestions:
+                current = "suggestions"
+                _update_progress()
+                if risk_result and risk_result.risk_items:
                     review_suggestions_result = generate_review_suggestions(
                         pr_info=pr_info, diff_context=diff_context,
                         risk_result=risk_result, llm_config=llm_config,
                         output_language=output_language,
                     )
-                    status.write(f"✓ {t(lang, 'ph_suggestions')}")
-                elif do_suggestions:
+                    completed.add("suggestions")
+                else:
                     review_suggestions_result = generate_review_suggestions(
                         pr_info=pr_info, diff_context=diff_context,
                         risk_result=risk_result, llm_config=llm_config,
                         output_language=output_language,
                     )
-                    status.write(f"✓ {t(lang, 'ph_suggestions')}")
+                    skipped.add("suggestions")
 
-                status.update(label=t(lang, "ph_done"), state="complete")
+            # Done
+            current = None
+            _update_progress()
 
             elapsed_seconds = time.perf_counter() - start_time
+            progress_placeholder.markdown(
+                f"**{t(lang, 'ph_done')}** — "
+                f"{t(lang, 'analysis_time', time=format_elapsed_time(elapsed_seconds, lang))}"
+            )
 
             result_data = {
                 "pr_info": pr_info,
@@ -724,23 +856,41 @@ if analyze_clicked:
             })
 
         except PRUrlParseError:
+            failed = current or "parse_url"
+            _update_progress()
             st.error(t(lang, "err_parse"))
         except GitHubClientError as e:
-            st.error(t(lang, "err_github") + f"\n\n({e})")
+            failed = current or "fetch_pr"
+            _update_progress()
+            st.error(t(lang, "step_failed_at", stage=t(lang, _STEP_KEY_LABEL.get(failed, "step_fetch_pr"))))
         except LLMConfigError:
+            failed = current or "summary"
+            _update_progress()
             st.error(t(lang, "err_llm_config"))
         except LLMClientError as e:
-            st.error(t(lang, "err_llm") + f"\n\n({e})")
+            failed = current or "summary"
+            _update_progress()
+            st.error(t(lang, "step_failed_at", stage=t(lang, _STEP_KEY_LABEL.get(failed, "step_summary"))))
         except SummaryAnalyzerError as e:
-            st.error(t(lang, "err_summary") + f"\n\n({e})")
+            failed = "summary"
+            _update_progress()
+            st.error(t(lang, "step_failed_at", stage=t(lang, "step_summary")))
         except RiskAnalyzerError as e:
-            st.error(t(lang, "err_risk") + f"\n\n({e})")
+            failed = "risk"
+            _update_progress()
+            st.error(t(lang, "step_failed_at", stage=t(lang, "step_risk")))
         except ReviewSuggestionError as e:
-            st.error(t(lang, "err_suggestion") + f"\n\n({e})")
+            failed = "suggestions"
+            _update_progress()
+            st.error(t(lang, "step_failed_at", stage=t(lang, "step_suggestions")))
         except ValueError as e:
+            failed = current or "parse_url"
+            _update_progress()
             st.error(t(lang, "err_input") + f"\n\n({e})")
         except Exception as e:
-            st.error(t(lang, "err_unexpected") + f"\n\n({e})")
+            failed = current or "parse_url"
+            _update_progress()
+            st.error(t(lang, "step_failed_at", stage=t(lang, _STEP_KEY_LABEL.get(failed, "step_parse_url"))))
 
 # ====================================================================
 # Results display
@@ -802,12 +952,16 @@ if cached:
             st.caption(t(lang, "more_files", n=len(changed_files) - 50))
 
     with st.expander(t(lang, "diff_title"), expanded=False):
-        dcols = st.columns(5)
+        dcols = st.columns(4)
         dcols[0].metric(t(lang, "total_files"), diff_context.total_files)
         dcols[1].metric(t(lang, "included"), diff_context.included_files)
         dcols[2].metric(t(lang, "skipped"), diff_context.skipped_files)
         dcols[3].metric(t(lang, "truncated"), diff_context.truncated_files)
-        dcols[4].metric(t(lang, "chars"), f"{diff_context.original_total_chars} -> {diff_context.processed_total_chars}")
+        st.markdown(f"**{t(lang, 'chars')}**")
+        st.markdown(
+            f"{t(lang, 'chars_original')}: {diff_context.original_total_chars}  "
+            f"→  {t(lang, 'chars_processed')}: {diff_context.processed_total_chars}"
+        )
         if diff_context.was_truncated:
             st.warning(t(lang, "truncated_warning"))
         if diff_context.warnings:
