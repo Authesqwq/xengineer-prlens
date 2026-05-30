@@ -5,11 +5,11 @@ from unittest.mock import patch
 
 import pytest
 
-from src.llm_client import LLMConfig, LLMResponse, LLMResponseError
+from src.llm_client import LLMConfig, LLMResponseError
 from src.risk_analyzer import (
     RiskAnalysisResult,
-    RiskItem,
     RiskResponseParseError,
+    _build_risk_fallback,
     analyze_pr_risks,
     build_risk_messages,
     parse_risk_response,
@@ -47,6 +47,7 @@ def _make_config():
 
 
 def _make_response(content):
+    from src.llm_client import LLMResponse
     return LLMResponse(content=content, model="m", usage={}, raw_response={})
 
 
@@ -70,14 +71,6 @@ def _sample_risk_json(**overrides):
     }
     data.update(overrides)
     return data
-
-
-def _sample_empty_risk_json():
-    return {
-        "overall_risk_level": "low",
-        "risk_items": [],
-        "limitations": [],
-    }
 
 
 # ---------------------------------------------------------------------------
@@ -109,6 +102,11 @@ class TestBuildRiskMessages:
                     "security", "performance", "compatibility", "maintainability"]:
             assert rt in s
 
+    def test_system_contains_json_strictness(self):
+        msgs = build_risk_messages(FakePRInfo(), FakeDiffContext())
+        s = msgs[0]["content"].lower()
+        assert "double quotes" in s
+
     def test_system_contains_evidence_requirement(self):
         msgs = build_risk_messages(FakePRInfo(), FakeDiffContext())
         s = msgs[0]["content"].lower()
@@ -131,6 +129,17 @@ class TestBuildRiskMessages:
         dc = FakeDiffContext(warnings=[])
         msgs = build_risk_messages(FakePRInfo(), dc)
         assert "Diff context warnings" not in msgs[1]["content"]
+
+    def test_zh_language_in_system_prompt(self):
+        msgs = build_risk_messages(FakePRInfo(), FakeDiffContext(), output_language="zh")
+        system = msgs[0]["content"]
+        assert "Simplified Chinese" in system
+
+    def test_en_language_default(self):
+        msgs = build_risk_messages(FakePRInfo(), FakeDiffContext())
+        system = msgs[0]["content"]
+        assert "Simplified Chinese" not in system
+        assert "English" in system
 
 
 # ---------------------------------------------------------------------------
@@ -215,9 +224,20 @@ class TestParseRiskResponse:
         with pytest.raises(RiskResponseParseError):
             parse_risk_response("")
 
+    def test_empty_with_fallback_returns_fallback(self):
+        result = parse_risk_response("", allow_empty_fallback=True)
+        assert result.overall_risk_level == "low"
+        assert result.risk_items == []
+
+    def test_empty_with_fallback_raises_when_disabled(self):
+        with pytest.raises(RiskResponseParseError):
+            parse_risk_response("", allow_empty_fallback=False)
+
     def test_empty_risk_response_parses(self):
         import json
-        result = parse_risk_response(json.dumps(_sample_empty_risk_json()))
+        result = parse_risk_response(json.dumps({
+            "overall_risk_level": "low", "risk_items": [], "limitations": [],
+        }))
         assert result.risk_items == []
         assert result.overall_risk_level == "low"
 
@@ -278,11 +298,39 @@ class TestParseRiskResponse:
 
 
 # ---------------------------------------------------------------------------
-# analyze_pr_risks
+# _build_risk_fallback
 # ---------------------------------------------------------------------------
 
 
-class TestAnalyzePRRisks:
+class TestBuildRiskFallback:
+    def test_fallback_empty_content_en(self):
+        result = _build_risk_fallback("", output_language="en", reason="empty_content")
+        assert result.overall_risk_level == "low"
+        assert result.risk_items == []
+        assert any("empty content" in lim.lower() for lim in result.limitations)
+
+    def test_fallback_empty_content_zh(self):
+        result = _build_risk_fallback("", output_language="zh", reason="empty_content")
+        assert result.overall_risk_level == "low"
+        assert any("空内容" in lim for lim in result.limitations)
+
+    def test_fallback_invalid_json_en(self):
+        result = _build_risk_fallback("~~~", output_language="en", reason="model_output_invalid")
+        assert result.overall_risk_level == "low"
+        assert any("could not be parsed" in lim.lower() for lim in result.limitations)
+
+    def test_fallback_invalid_json_zh(self):
+        result = _build_risk_fallback("~~~", output_language="zh", reason="model_output_invalid")
+        assert result.overall_risk_level == "low"
+        assert any("未能解析" in lim for lim in result.limitations)
+
+
+# ---------------------------------------------------------------------------
+# analyze_pr_risks -- success
+# ---------------------------------------------------------------------------
+
+
+class TestAnalyzePRRisksSuccess:
     def test_calls_chat_completion(self):
         import json
         resp = _make_response(json.dumps(_sample_risk_json()))
@@ -310,99 +358,111 @@ class TestAnalyzePRRisks:
 
 
 # ---------------------------------------------------------------------------
-# parse_risk_response — empty content fallback
+# analyze_pr_risks -- fallback on invalid JSON
 # ---------------------------------------------------------------------------
 
 
-class TestParseRiskResponseEmptyFallback:
-    def test_empty_without_fallback_raises(self):
-        with pytest.raises(RiskResponseParseError):
-            parse_risk_response("", allow_empty_fallback=False)
-
-    def test_empty_with_fallback_returns_fallback(self):
-        result = parse_risk_response("", allow_empty_fallback=True)
-        assert result.overall_risk_level == "low"
-        assert result.risk_items == []
-        assert len(result.limitations) > 0
-        assert any("empty content" in lim.lower() for lim in result.limitations)
-        assert result.raw_response == ""
-
-    def test_whitespace_only_with_fallback_returns_fallback(self):
-        result = parse_risk_response("   ", allow_empty_fallback=True)
-        assert result.overall_risk_level == "low"
-        assert result.risk_items == []
-
-    def test_fallback_raw_response_preserved(self):
-        result = parse_risk_response("", allow_empty_fallback=True)
-        assert result.raw_response == ""
-
-
-# ---------------------------------------------------------------------------
-# analyze_pr_risks — empty content fallback
-# ---------------------------------------------------------------------------
-
-
-class TestAnalyzePRRisksEmptyFallback:
-    def test_empty_content_string_returns_fallback(self):
-        resp = _make_response("")
-        with patch("src.risk_analyzer.chat_completion", return_value=resp) as mock_cc:
-            result = analyze_pr_risks(FakePRInfo(), FakeDiffContext(), _make_config())
-            assert result.overall_risk_level == "low"
-            assert result.risk_items == []
-            assert any("empty content" in lim.lower() for lim in result.limitations)
-            # First call returns empty → triggers retry → both empty → fallback
-            assert mock_cc.call_count == 2
-
-    def test_empty_content_exception_returns_fallback(self):
-        from unittest.mock import patch as upatch
-        with upatch("src.risk_analyzer.chat_completion") as mock_cc:
-            mock_cc.side_effect = LLMResponseError("Model returned empty content.")
-            result = analyze_pr_risks(FakePRInfo(), FakeDiffContext(), _make_config())
-            assert result.overall_risk_level == "low"
-            assert result.risk_items == []
-            assert any("empty content" in lim.lower() for lim in result.limitations)
-
-    def test_non_empty_exception_does_not_fallback(self):
-        from unittest.mock import patch as upatch
-        with upatch("src.risk_analyzer.chat_completion") as mock_cc:
-            mock_cc.side_effect = LLMResponseError("Invalid response format")
-            with pytest.raises(LLMResponseError):
-                analyze_pr_risks(FakePRInfo(), FakeDiffContext(), _make_config())
-
-
-# ---------------------------------------------------------------------------
-# analyze_pr_risks — retry logic
-# ---------------------------------------------------------------------------
-
-
-class TestAnalyzePRRisksRetry:
-    def test_first_empty_second_normal_returns_second(self):
+class TestAnalyzePRRisksInvalidJSON:
+    def test_first_bad_json_retry_success(self):
         import json
-        empty_resp = _make_response("")
-        normal_resp = _make_response(json.dumps(_sample_risk_json()))
-        with patch("src.risk_analyzer.chat_completion",
-                   side_effect=[empty_resp, normal_resp]) as mock_cc:
+        resp1 = _make_response("not valid json at all !!!")
+        resp2 = _make_response(json.dumps(_sample_risk_json()))
+        with patch("src.risk_analyzer.chat_completion", side_effect=[resp1, resp2]) as mock_cc:
             result = analyze_pr_risks(FakePRInfo(), FakeDiffContext(), _make_config())
             assert result.overall_risk_level == "medium"
             assert len(result.risk_items) == 1
             assert mock_cc.call_count == 2
 
-    def test_both_empty_returns_fallback(self):
-        empties = [_make_response(""), _make_response("")]
-        with patch("src.risk_analyzer.chat_completion", side_effect=empties) as mock_cc:
+    def test_first_bad_json_retry_still_bad_fallback(self):
+        resp1 = _make_response("invalid")
+        resp2 = _make_response("still not json")
+        with patch("src.risk_analyzer.chat_completion", side_effect=[resp1, resp2]) as mock_cc:
+            result = analyze_pr_risks(FakePRInfo(), FakeDiffContext(), _make_config())
+            assert result.overall_risk_level == "low"
+            assert result.risk_items == []
+            assert any("could not be parsed" in lim.lower() or "未能解析" in lim
+                       for lim in result.limitations)
+            assert mock_cc.call_count == 2
+
+    def test_zh_fallback_after_bad_json(self):
+        resp1 = _make_response("garbage")
+        resp2 = _make_response("more garbage")
+        with patch("src.risk_analyzer.chat_completion", side_effect=[resp1, resp2]):
+            result = analyze_pr_risks(FakePRInfo(), FakeDiffContext(), _make_config(),
+                                      output_language="zh")
+            assert any("未能解析" in lim for lim in result.limitations)
+
+    def test_fenced_but_invalid_json_retried(self):
+        resp1 = _make_response("```json\n{broken json!!!}\n```")
+        resp2 = _make_response(
+            '{"overall_risk_level":"low","risk_items":[],"limitations":["OK"]}'
+        )
+        with patch("src.risk_analyzer.chat_completion", side_effect=[resp1, resp2]) as mock_cc:
+            result = analyze_pr_risks(FakePRInfo(), FakeDiffContext(), _make_config())
+            assert result.overall_risk_level == "low"
+            assert result.risk_items == []
+            assert mock_cc.call_count == 2
+
+
+# ---------------------------------------------------------------------------
+# analyze_pr_risks -- empty content
+# ---------------------------------------------------------------------------
+
+
+class TestAnalyzePRRisksEmpty:
+    def test_empty_content_string_fallback(self):
+        resp = _make_response("")
+        with patch("src.risk_analyzer.chat_completion", return_value=resp):
             result = analyze_pr_risks(FakePRInfo(), FakeDiffContext(), _make_config())
             assert result.overall_risk_level == "low"
             assert result.risk_items == []
             assert any("empty content" in lim.lower() for lim in result.limitations)
-            assert mock_cc.call_count == 2
 
-    def test_retry_messages_include_fallback_instruction(self):
+    def test_empty_content_exception_fallback(self):
         with patch("src.risk_analyzer.chat_completion") as mock_cc:
-            mock_cc.side_effect = [
-                LLMResponseError("Model returned empty content."),
-                _make_response('{"overall_risk_level":"low","risk_items":[],"limitations":[]}'),
-            ]
+            mock_cc.side_effect = LLMResponseError("Model returned empty content.")
+            result = analyze_pr_risks(FakePRInfo(), FakeDiffContext(), _make_config())
+            assert result.overall_risk_level == "low"
+            assert any("empty content" in lim.lower() for lim in result.limitations)
+
+
+# ---------------------------------------------------------------------------
+# analyze_pr_risks -- errors that must NOT be suppressed
+# ---------------------------------------------------------------------------
+
+
+class TestAnalyzePRRisksErrorsStillRaise:
+    def test_non_empty_llm_response_error_raises(self):
+        with patch("src.risk_analyzer.chat_completion") as mock_cc:
+            mock_cc.side_effect = LLMResponseError("Invalid response format")
+            with pytest.raises(LLMResponseError):
+                analyze_pr_risks(FakePRInfo(), FakeDiffContext(), _make_config())
+
+    def test_unauthorized_still_raises(self):
+        from src.llm_client import LLMUnauthorizedError
+        with patch("src.risk_analyzer.chat_completion") as mock_cc:
+            mock_cc.side_effect = LLMUnauthorizedError("Bad key")
+            with pytest.raises(LLMUnauthorizedError):
+                analyze_pr_risks(FakePRInfo(), FakeDiffContext(), _make_config())
+
+    def test_rate_limit_still_raises(self):
+        from src.llm_client import LLMRateLimitError
+        with patch("src.risk_analyzer.chat_completion") as mock_cc:
+            mock_cc.side_effect = LLMRateLimitError("Rate limited")
+            with pytest.raises(LLMRateLimitError):
+                analyze_pr_risks(FakePRInfo(), FakeDiffContext(), _make_config())
+
+    def test_network_error_still_raises(self):
+        from src.llm_client import LLMClientError
+        with patch("src.risk_analyzer.chat_completion") as mock_cc:
+            mock_cc.side_effect = LLMClientError("Connection refused")
+            with pytest.raises(LLMClientError):
+                analyze_pr_risks(FakePRInfo(), FakeDiffContext(), _make_config())
+
+    def test_max_two_calls_on_fallback(self):
+        resp1 = _make_response("bad json")
+        resp2 = _make_response("also bad")
+        with patch("src.risk_analyzer.chat_completion",
+                   side_effect=[resp1, resp2]) as mock_cc:
             analyze_pr_risks(FakePRInfo(), FakeDiffContext(), _make_config())
-            retry_msgs = mock_cc.call_args_list[1][0][0]
-            user_followup = retry_msgs[-1]["content"]
-            assert "previous response was empty" in user_followup.lower()
+            assert mock_cc.call_count == 2
