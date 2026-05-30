@@ -30,12 +30,25 @@ PRLens 是一个面向开发者的 AI PR Review 助手。用户输入 GitHub PR 
 - PR4: GitHub PR basic info client added
 - PR5: GitHub PR changed files client added
 - PR6: Diff processor added
+- PR7: LLM client added
 
 ## Run Tests
 
 ```bash
 pytest -q
 ```
+
+## Environment Variables
+
+Copy `.env.example` and configure local secrets in `.env`.
+
+Required for GitHub API:
+- `GITHUB_TOKEN` optional for public repositories, recommended to avoid rate limits
+
+Required for LLM calls:
+- `LLM_API_KEY`
+- `LLM_MODEL`
+- `LLM_BASE_URL`
 
 ## 当前状态
 
