@@ -153,6 +153,8 @@ GITHUB_TOKEN=optional_github_token
 
 ## 11. 启动 Demo
 
+项目已通过 `.streamlit/config.toml` 固定为浅色主题，保证本地和线上部署的视觉一致性。
+
 ```bash
 streamlit run app.py
 ```
