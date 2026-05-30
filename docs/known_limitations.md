@@ -1,33 +1,33 @@
-# Known Limitations
+# 已知限制
 
-## MVP Scope
+## MVP 范围限制
 
-- Public GitHub PRs only.
-- No GitHub write-back.
-- No GitHub App installation.
-- No persistent database.
-- Session history is temporary.
-- No full repository indexing.
-- No test execution or compilation.
+- 仅支持公开 GitHub PR
+- 不写回 GitHub 评论
+- 不安装 GitHub App
+- 不使用持久化数据库
+- 会话历史仅临时保存在当前 session
+- 不进行完整仓库索引
+- 不运行测试，也不编译代码
 
-## AI Limitations
+## AI 能力限制
 
-- May miss cross-file logic.
-- May overestimate low-confidence risks.
-- May produce incomplete analysis for truncated diffs.
-- Requires human verification.
-- Fallback result means the model output was not parseable or empty.
+- 可能遗漏跨文件深层逻辑
+- 可能高估低置信度风险
+- diff 截断后可能导致分析不完整
+- 所有结果都需要人工确认
+- fallback 结果表示模型输出为空或无法解析
 
-## Demo Risks
+## Demo 风险
 
-- GitHub API rate limit.
-- LLM API outage or rate limit.
-- Public PR may change.
-- Full mode may take longer on large PRs.
+- GitHub API rate limit
+- LLM API 不可用或 rate limit
+- 公开 PR 后续可能变化
+- 完整模式在大 PR 上耗时更长
 
-## Recommended Mitigation
+## 建议应对
 
-- Use Standard mode for live demo.
-- Prepare backup screenshots.
-- Prepare a short recorded demo.
-- Use stable public PR examples.
+- 现场演示优先使用标准模式
+- 准备备份截图
+- 准备短录屏
+- 使用稳定公开 PR 案例

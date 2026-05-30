@@ -1,40 +1,40 @@
-# PRLens Final Submission Checklist
+# PRLens 最终提交检查清单
 
-## Repository
+## 仓库
 
-- [ ] Public repository
-- [ ] README completed
-- [ ] PRD v0.3 included as final scope-aligned PRD
-- [ ] Product scope evolution documented
-- [ ] Demo cases documented
-- [ ] Demo script prepared
-- [ ] `.env` not committed
-- [ ] `.env.example` provided
+- [ ] 仓库为公开状态
+- [ ] README 已完成
+- [ ] PRD v0.3 已作为最终范围校准版纳入
+- [ ] 产品范围演进已说明
+- [ ] Demo 案例已记录
+- [ ] Demo 讲解稿已准备
+- [ ] `.env` 未提交
+- [ ] `.env.example` 已提供
 
-## Functionality
+## 功能
 
-- [ ] PR URL input works
-- [ ] Fast mode works
-- [ ] Standard mode works
-- [ ] Full mode works
-- [ ] Chinese UI works
-- [ ] English UI works
-- [ ] History restore works
-- [ ] Markdown export works
-- [ ] Progress feedback works
-- [ ] Elapsed time display works
-- [ ] Risk fallback works
+- [ ] PR URL 输入可用
+- [ ] 快速模式可用
+- [ ] 标准模式可用
+- [ ] 完整模式可用
+- [ ] 中文界面可用
+- [ ] 英文界面可用
+- [ ] 历史记录恢复可用
+- [ ] Markdown 导出可用
+- [ ] 进度反馈可用
+- [ ] 耗时展示可用
+- [ ] 风险 fallback 可用
 
-## Testing
+## 测试
 
-- [ ] `pytest -q` passes (266 passed, 0 failed)
-- [ ] At least two demo PRs verified
-- [ ] No traceback in UI
-- [ ] No API key leakage
+- [ ] `pytest -q` 通过（266 passed，0 failed）
+- [ ] 至少两个 Demo PR 已验证
+- [ ] 页面不展示 traceback
+- [ ] 无 API Key 泄露
 
 ## Demo
 
-- [ ] 2-minute demo flow prepared
-- [ ] 5-minute demo flow prepared
-- [ ] Backup screenshots prepared
-- [ ] Backup video prepared
+- [ ] 两分钟演示流程已准备
+- [ ] 五分钟演示流程已准备
+- [ ] 备份截图已准备
+- [ ] 备份录屏已准备

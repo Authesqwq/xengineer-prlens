@@ -1,67 +1,67 @@
-# Product Scope Evolution
+# 产品范围演进说明
 
-## 1. Purpose
+## 1. 文档目的
 
-This document explains how PRLens evolved from the initial PRD to the final MVP.
+本文档用于说明 PRLens 从初始 PRD 到最终 MVP 的范围演进过程。
 
-The goal is to make the product process transparent. PRD v0.3 is a final scope-aligned document, not a claim that all implementation decisions were fixed before development.
+PRD v0.3 是最终范围校准版，并不表示所有实现决策都在开发前完全固定。
 
-## 2. PRD Versions
+## 2. PRD 版本
 
-| Version | Role | Notes |
+| 版本 | 角色 | 说明 |
 |---|---|---|
-| v0.1 | Initial draft | Covered background, research, feature planning, technical direction, and PR breakdown. |
-| v0.2 | AI product PRD | Added model selection, prompt engineering, evaluation plan, hallucination control, data loop, and launch strategy. |
-| v0.3 | Final scope-aligned PRD | Updated after PR1-PR17 to reflect implemented MVP scope and deferred items. |
+| v0.1 | 初版草稿 | 覆盖背景、调研、功能规划、技术方向和 PR 拆分 |
+| v0.2 | AI 产品 PRD | 补充模型选型、Prompt 工程、评测体系、幻觉治理、数据闭环和上线策略 |
+| v0.3 | 最终范围校准版 | 根据 PR1-PR17 实现结果更新 MVP 范围和后续规划 |
 
-## 3. Why Scope Changed
+## 3. 为什么范围发生调整
 
-The project was built under short-cycle training camp constraints. During implementation, the scope was adjusted based on:
+项目处于短周期实训营场景，开发过程中根据以下因素调整了范围：
 
-- Development time
-- Demo stability
-- UX feedback
-- API reliability
-- LLM output robustness
-- Need for a clear MVP boundary
+- 开发时间限制
+- Demo 稳定性要求
+- 用户体验反馈
+- API 可用性
+- LLM 输出稳定性
+- MVP 边界控制
 
-## 4. Major Scope Adjustments
+## 4. 主要范围调整
 
-| Initial Plan | Final Decision | Reason |
+| 初始规划 | 最终处理 | 原因 |
 |---|---|---|
-| Example PR quick entry in the main page | Removed from main product flow | It created UI clutter and was less useful than documented demo cases |
-| User feedback buttons for each risk | Deferred | Feedback loop requires persistence and is better suited for a deployed version |
-| Generic result caching | Reframed as session-level history | Session history is sufficient for Demo and avoids database scope |
-| Single full analysis flow | Replaced by Fast / Standard / Full modes | Allows users to control analysis depth |
-| Static loading state | Replaced by step-by-step progress | Reduces user uncertainty during slow analysis |
-| Basic result export | Implemented Markdown report export | Useful for demo and review handoff |
-| Raw model error exposure | Replaced by structured fallback | Improves robustness and demo stability |
+| 主页面示例 PR 快速入口 | 从主流程移除，改为文档记录 Demo 案例 | 示例入口干扰主流程，文档案例更稳定 |
+| 风险项反馈按钮 | 后续规划 | 反馈闭环需要持久化存储，不适合当前 MVP |
+| 通用缓存 | 调整为会话级历史记录 | 满足 Demo 需求，同时避免数据库范围膨胀 |
+| 单一完整分析流程 | 增加快速、标准、完整三种模式 | 用户可根据需要控制分析深度 |
+| 静态加载状态 | 增加分阶段进度反馈 | 降低用户误判页面卡住的概率 |
+| 基础导出能力 | 实现 Markdown 报告导出 | 便于 Demo 和结果交付 |
+| 模型错误直接暴露 | 改为结构化 fallback | 提升稳定性和演示可靠性 |
 
-## 5. Final MVP Boundary
+## 5. 最终 MVP 边界
 
-The final MVP focuses on:
+**已纳入：**
 
-- Public GitHub PR analysis
-- Structured AI summary
-- Risk analysis
-- Review suggestion generation
-- Analysis modes
-- Session history
-- Markdown export
-- Bilingual UI
-- Progress feedback
-- Robust fallback
+- 公开 GitHub PR 分析
+- AI 变更总结
+- 风险分析
+- Review 建议
+- 三种分析模式
+- 会话历史
+- Markdown 导出
+- 双语界面
+- 进度反馈
+- fallback
 
-Out of scope:
+**暂不纳入：**
 
 - GitHub App
-- GitHub write-back
-- Private repository support
-- Persistent database
-- Team rule management
-- Cloud user accounts
-- Full repository indexing
+- GitHub 写回评论
+- 私有仓库完整支持
+- 持久化数据库
+- 团队规则库
+- 云端用户系统
+- 完整仓库索引
 
-## 6. Conclusion
+## 6. 小结
 
-PRLens followed an iterative MVP process. The final PRD v0.3 records the implemented product scope and explains which early ideas were completed, adjusted, or deferred.
+PRLens 采用迭代式 MVP 开发方式。最终 PRD v0.3 记录了已实现的产品范围，也说明了早期需求中被完成、调整或延期的部分。

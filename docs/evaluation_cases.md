@@ -1,65 +1,66 @@
-# PRLens Evaluation Cases
+# PRLens Demo 验证案例
 
-## Purpose
+## 文档目的
 
-This document records demo-oriented validation cases for PRLens.
-It is not a formal academic benchmark. Its purpose is to make the demo flow reproducible and to clarify expected behavior.
+本文档用于记录 PRLens 的 Demo 验证案例。
+它不是严格学术评测集，而是用于保证演示流程可复现，并说明每个案例的预期表现。
 
-## Case 1: octocat/Hello-World #6
+## Case 1：octocat/Hello-World #6
 
-- URL: https://github.com/octocat/Hello-World/pull/6
-- Recommended Mode: Fast or Standard
-- Why this case:
-  - Small public PR.
-  - Suitable for validating the basic end-to-end pipeline.
-- Expected Behavior:
-  - PR URL can be parsed.
-  - PR metadata can be fetched.
-  - Changed files can be displayed.
-  - Summary can be generated.
-- Demo Notes:
-  - Use this case for a quick live demo.
-- Known Risk:
-  - The PR is very small, so it may not produce meaningful risks.
+- URL：https://github.com/octocat/Hello-World/pull/6
+- 推荐模式：快速模式或标准模式
+- 选择原因：
+  - 公开 PR
+  - 变更较小
+  - 适合验证基础端到端链路
+- 预期表现：
+  - PR URL 可以正常解析
+  - PR 基本信息可以获取
+  - 变更文件可以展示
+  - 可以生成变更总结
+- Demo 备注：
+  - 适合快速现场演示
+- 已知风险：
+  - 该 PR 很小，可能不会产生有意义的风险项
 
-## Case 2: fastapi/fastapi #12000
+## Case 2：fastapi/fastapi #12000
 
-- URL: https://github.com/fastapi/fastapi/pull/12000
-- Recommended Mode: Standard
-- Why this case:
-  - Real-world public repository.
-  - More suitable for showing diff context, risk analysis, and fallback handling.
-- Expected Behavior:
-  - PR metadata and changed files can be fetched.
-  - Summary should explain the main change.
-  - Risk analysis should either return structured risks or a graceful fallback.
-- Demo Notes:
-  - This case is useful for showing robustness.
-- Known Risk:
-  - Risk analysis may trigger fallback depending on model output.
-  - This is acceptable because PRLens has fallback handling.
+- URL：https://github.com/fastapi/fastapi/pull/12000
+- 推荐模式：标准模式
+- 选择原因：
+  - 真实公开项目
+  - 适合展示 diff 上下文、风险分析和 fallback
+- 预期表现：
+  - PR 基本信息和变更文件可以获取
+  - Summary 应能说明主要变更
+  - Risk Analysis 应返回结构化结果，或在模型输出异常时进入 fallback
+- Demo 备注：
+  - 适合展示系统鲁棒性
+- 已知风险：
+  - 风险分析可能因模型输出触发 fallback
+  - 这是可接受结果，因为 PRLens 已实现 fallback
 
-## Case 3: Custom Medium PR
+## Case 3：中等复杂度自选 PR
 
-- URL: To be verified
-- Recommended Mode: Full
-- Why this case:
-  - Use a medium-sized PR to demonstrate Review Suggestions.
-- Expected Behavior:
-  - Summary, Risk Analysis, and Review Suggestions should all be generated.
-- Demo Notes:
-  - Fill this before final recording.
+- URL：待验证
+- 推荐模式：完整模式
+- 选择原因：
+  - 用于展示 Review Suggestions
+- 预期表现：
+  - 可以生成 Summary、Risk Analysis 和 Review Suggestions
+- Demo 备注：
+  - 最终录屏前补充
 
-## Evaluation Checklist
+## 验证清单
 
-- [ ] PR URL can be parsed.
-- [ ] GitHub PR info can be fetched.
-- [ ] Changed files can be displayed.
-- [ ] Diff context stats are visible.
-- [ ] Analysis progress updates.
-- [ ] Elapsed time is shown.
-- [ ] Summary is generated.
-- [ ] Risk Analysis behaves correctly.
-- [ ] Review Suggestions are generated in Full mode when risks exist.
-- [ ] Export works.
-- [ ] History restore works.
+- [ ] PR URL 可以解析
+- [ ] GitHub PR 信息可以获取
+- [ ] 变更文件可以展示
+- [ ] Diff 上下文统计可以展示
+- [ ] 分析进度正常更新
+- [ ] 分析耗时正常显示
+- [ ] Summary 可以生成
+- [ ] Risk Analysis 表现正常
+- [ ] 完整模式下，在存在风险项时可以生成 Review Suggestions
+- [ ] 导出报告可用
+- [ ] 历史记录恢复可用
