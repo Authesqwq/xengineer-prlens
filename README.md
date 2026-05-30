@@ -34,6 +34,7 @@ PRLens 是一个面向开发者的 AI PR Review 助手。用户输入 GitHub PR 
 - PR8: PR summary analyzer added
 - PR9: Minimal Streamlit demo added
 - PR10: Risk analyzer added
+- PR11: Risk analysis integrated into demo
 
 ## Run Tests
 
@@ -50,6 +51,8 @@ pytest -q
 ```bash
 streamlit run app.py
 ```
+
+The demo currently calls the LLM twice: once for change summary and once for risk analysis.
 
 ## Environment Variables
 
