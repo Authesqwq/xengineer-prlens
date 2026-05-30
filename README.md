@@ -39,6 +39,7 @@ PRLens 是一个面向开发者的 AI PR Review 助手。用户输入 GitHub PR 
 - PR13: Review suggestions integrated into demo
 - PR14: Demo UX and stability improved (bilingual 中文/English, prompt-level language control)
 - PR15: Visual design and product quality improvements
+- PR16: Workspace sidebar, analysis modes, and session history
 
 ## Run Tests
 

@@ -1,11 +1,12 @@
 """
 PRLens: AI PR Review Assistant -- Streamlit Demo.
 
-Bilingual (中文 / English) single-page workflow: URL parsing, GitHub data fetching,
-diff processing, LLM summary, risk analysis, and review suggestions.
+Bilingual (中文 / English) single-page workflow with workspace sidebar,
+analysis modes, session history, and report export.
 """
 
 import os
+import time
 import streamlit as st
 from dotenv import load_dotenv
 
@@ -55,6 +56,7 @@ button[title="View fullscreen"] { display: none !important; }
 }
 
 .prlens-muted { color: #64748b; font-size: 0.9rem; }
+.prlens-sidebar-title { font-size: 1.1rem; font-weight: 700; }
 
 .prlens-badge {
     display: inline-block; padding: 4px 10px; border-radius: 999px;
@@ -68,7 +70,6 @@ section[data-testid="stSidebar"] { background: #f8fafc; }
 section[data-testid="stSidebar"] .stRadio label { font-size: 0.9rem; }
 </style>
 """
-
 st.markdown(CSS, unsafe_allow_html=True)
 
 # ---------------------------------------------------------------------------
@@ -82,10 +83,24 @@ T: dict[str, dict[str, str]] = {
         "pr_url_label": "GitHub PR 链接",
         "pr_url_placeholder": "请输入公开 GitHub PR 链接，例如：https://github.com/owner/repo/pull/123",
         "analyze_btn": "开始分析",
-        "clear_btn": "清空结果",
-        "export_btn": "导出分析报告",
+        "sidebar_title": "PRLens",
+        "lang_label": "语言",
+        "mode_label": "分析模式",
+        "mode_fast": "快速模式",
+        "mode_standard": "标准模式",
+        "mode_full": "完整模式",
+        "mode_hint": "快速 1 次，标准约 2 次，完整最多 3 次模型调用。",
+        "history_label": "历史记录",
+        "history_empty": "暂无历史记录",
+        "clear_history": "清空历史",
+        "export_btn": "导出报告",
         "export_filename": "prlens_report.md",
-        "lang_stale_notice": "当前分析结果可能来自切换前的语言设置。如需生成当前语言版本，请重新点击「开始分析」。",
+        "lang_stale": "当前结果来自历史记录，正文语言可能与当前界面语言不一致。如需当前语言版本，请重新点击「开始分析」。",
+        "history_restored": "已从历史记录恢复该分析结果。",
+        "mode_fast_risk_note": "当前为快速模式，未执行风险分析。",
+        "mode_fast_sug_note": "当前为快速模式，未生成 Review 建议。",
+        "mode_standard_sug_note": "当前为标准模式，未生成 Review 建议。如需建议，请切换到完整模式后重新分析。",
+        "risks_count": "{n} 个风险",
         "export_heading": "# PRLens 分析报告",
         "export_overview": "## PR 概览",
         "export_title_row": "- 标题: {title}",
@@ -194,10 +209,24 @@ T: dict[str, dict[str, str]] = {
         "pr_url_label": "GitHub PR URL",
         "pr_url_placeholder": "Enter a public GitHub PR URL, e.g. https://github.com/owner/repo/pull/123",
         "analyze_btn": "Analyze PR",
-        "clear_btn": "Clear Results",
+        "sidebar_title": "PRLens",
+        "lang_label": "Language",
+        "mode_label": "Analysis Mode",
+        "mode_fast": "Fast",
+        "mode_standard": "Standard",
+        "mode_full": "Full",
+        "mode_hint": "Fast uses 1 LLM call, Standard about 2, Full up to 3.",
+        "history_label": "History",
+        "history_empty": "No history yet",
+        "clear_history": "Clear History",
         "export_btn": "Export Report",
         "export_filename": "prlens_report.md",
-        "lang_stale_notice": "The current analysis may have been generated with the previous language setting. Click Analyze PR again to regenerate it in the selected language.",
+        "lang_stale": "This result was restored from history. Its content language may differ from the current UI language. Click Analyze PR to regenerate it.",
+        "history_restored": "This result was restored from history.",
+        "mode_fast_risk_note": "Fast mode does not run risk analysis.",
+        "mode_fast_sug_note": "Fast mode does not generate review suggestions.",
+        "mode_standard_sug_note": "Standard mode does not generate review suggestions. Switch to Full mode and analyze again to generate suggestions.",
+        "risks_count": "{n} risks",
         "export_heading": "# PRLens Analysis Report",
         "export_overview": "## PR Overview",
         "export_title_row": "- Title: {title}",
@@ -311,11 +340,15 @@ def t(lang: str, key: str, **fmt) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Display helpers
+# Helpers
 # ---------------------------------------------------------------------------
 
 SEVERITY_ORDER = {"high": 0, "medium": 1, "low": 2}
 PRIORITY_ORDER = {"high": 0, "medium": 1, "low": 2}
+MODE_KEYS = {"快速模式": "fast", "标准模式": "standard", "完整模式": "full",
+             "Fast": "fast", "Standard": "standard", "Full": "full"}
+
+HISTORY_MAX = 10
 
 
 def format_pr_status(pr_info, lang: str) -> str:
@@ -334,13 +367,13 @@ def _none_if_empty(items, lang: str):
     return items if items else [t(lang, "none")]
 
 
-def _risk_level_badge_class(level: str) -> str:
+def _badge_class(level: str) -> str:
     m = {"high": "prlens-badge prlens-badge-high",
          "medium": "prlens-badge prlens-badge-medium"}
     return m.get(level, "prlens-badge prlens-badge-low")
 
 
-def _risk_level_label(level: str, lang: str) -> str:
+def _risk_label(level: str, lang: str) -> str:
     m = {"high": t(lang, "risk_high"), "medium": t(lang, "risk_medium")}
     return m.get(level, t(lang, "risk_low"))
 
@@ -349,7 +382,7 @@ def _risk_level_label(level: str, lang: str) -> str:
 # Report builder
 # ---------------------------------------------------------------------------
 
-def _build_report_md(lang: str, pr_info, summary_result, risk_result, review_suggestions_result) -> str:
+def _build_report_md(lang, pr_info, summary_result, risk_result, review_suggestions_result) -> str:
     lines = [t(lang, "export_heading"), ""]
     lines.append(t(lang, "export_overview"))
     lines.append(t(lang, "export_title_row", title=pr_info.title))
@@ -360,7 +393,6 @@ def _build_report_md(lang: str, pr_info, summary_result, risk_result, review_sug
     lines.append(t(lang, "export_deletions_row", deletions=pr_info.deletions))
     lines.append(t(lang, "export_commits_row", commits=pr_info.commits))
     lines.append("")
-
     if summary_result:
         lines.append(t(lang, "export_summary_title"))
         lines.append(t(lang, "export_summary_s"))
@@ -378,10 +410,9 @@ def _build_report_md(lang: str, pr_info, summary_result, risk_result, review_sug
         for item in _none_if_empty(summary_result.uncertainties, lang):
             lines.append(f"- {item}")
         lines.append("")
-
     if risk_result:
         lines.append(t(lang, "export_risk_title"))
-        lines.append(t(lang, "export_risk_level", level=_risk_level_label(risk_result.overall_risk_level, lang)))
+        lines.append(t(lang, "export_risk_level", level=_risk_label(risk_result.overall_risk_level, lang)))
         lines.append("")
         if risk_result.risk_items:
             lines.append(t(lang, "export_risk_items"))
@@ -400,7 +431,6 @@ def _build_report_md(lang: str, pr_info, summary_result, risk_result, review_sug
             for item in risk_result.limitations:
                 lines.append(f"- {item}")
             lines.append("")
-
     if review_suggestions_result:
         lines.append(t(lang, "export_sug_title"))
         if review_suggestions_result.suggestions:
@@ -414,30 +444,63 @@ def _build_report_md(lang: str, pr_info, summary_result, risk_result, review_sug
         else:
             lines.append(t(lang, "export_sug_none"))
             lines.append("")
-
     lines.append(t(lang, "export_footer"))
     return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# History helpers
+# ---------------------------------------------------------------------------
+
+def _make_history_key(pr_url: str, lang: str, mode: str) -> str:
+    return f"{pr_url}|{lang}|{mode}"
+
+
+def _add_to_history(entry: dict):
+    history = st.session_state.setdefault("analysis_history", [])
+    key = _make_history_key(entry["url"], entry["language"], entry["analysis_mode"])
+    history = [h for h in history if _make_history_key(h["url"], h["language"], h["analysis_mode"]) != key]
+    history.insert(0, entry)
+    st.session_state["analysis_history"] = history[:HISTORY_MAX]
+
+
+def _history_item_label(entry: dict, lang: str) -> str:
+    try:
+        parsed = parse_github_pr_url(entry["url"])
+        short = f"{parsed.owner}/{parsed.repo} #{parsed.pull_number}"
+    except Exception:
+        short = entry["url"]
+    if entry.get("risk_level"):
+        level_text = _risk_label(entry["risk_level"], lang)
+        if entry.get("risk_count", 0) > 0:
+            return f"{short} · {level_text} · {t(lang, 'risks_count', n=entry['risk_count'])}"
+        return f"{short} · {level_text}"
+    return short
 
 
 # ---------------------------------------------------------------------------
 # Page config
 # ---------------------------------------------------------------------------
 
-st.set_page_config(
-    page_title="PRLens", page_icon="🔍", layout="wide",
-    initial_sidebar_state="expanded",
-)
+st.set_page_config(page_title="PRLens", page_icon="🔍", layout="wide", initial_sidebar_state="expanded")
 
-# ---------------------------------------------------------------------------
-# Sidebar — settings only
-# ---------------------------------------------------------------------------
+# init session state
+if "analysis_history" not in st.session_state:
+    st.session_state["analysis_history"] = []
+if "analysis_mode" not in st.session_state:
+    st.session_state["analysis_mode"] = "standard"
+
+# ====================================================================
+# SIDEBAR — workspace
+# ====================================================================
 
 with st.sidebar:
-    st.markdown("### 设置 / Settings")
+    st.markdown(f'<p class="prlens-sidebar-title">{t("en", "sidebar_title")}</p>', unsafe_allow_html=True)
+    st.divider()
 
+    # Language
     lang_choice = st.radio(
-        "语言 / Language",
-        ["中文", "English"],
+        t("en", "lang_label"), ["中文", "English"],
         key="sidebar_lang",
     )
     lang = "zh" if lang_choice == "中文" else "en"
@@ -445,42 +508,94 @@ with st.sidebar:
 
     st.divider()
 
-    if st.button(t(lang, "clear_btn"), use_container_width=True):
-        st.session_state.pop("analysis_result", None)
-        st.session_state.pop("result_lang", None)
+    # Analysis mode
+    st.caption(t(lang, "mode_label"))
+    mode_options_zh = ["快速模式", "标准模式", "完整模式"]
+    mode_options_en = ["Fast", "Standard", "Full"]
+    mode_options = mode_options_zh if lang == "zh" else mode_options_en
+    selected_mode = st.radio(
+        t(lang, "mode_label"),
+        mode_options,
+        index=1,  # default: standard
+        key="analysis_mode_radio",
+        label_visibility="collapsed",
+    )
+    st.session_state["analysis_mode"] = MODE_KEYS.get(selected_mode, "standard")
+    st.caption(t(lang, "mode_hint"))
+
+    st.divider()
+
+    # History
+    st.caption(t(lang, "history_label"))
+    history = st.session_state.get("analysis_history", [])
+    if history:
+        for i, entry in enumerate(history):
+            label = _history_item_label(entry, lang)
+            if st.button(label, key=f"hist_{i}", use_container_width=True):
+                st.session_state["analysis_result"] = entry["result"]
+                st.session_state["result_lang"] = entry.get("language", output_language)
+                st.session_state["result_from_history"] = True
+                st.session_state["pr_url_input"] = entry["url"]
+                st.rerun()
+    else:
+        st.caption(t(lang, "history_empty"))
+
+    st.divider()
+
+    # Actions
+    cached = st.session_state.get("analysis_result")
+    if cached:
+        summary = cached.get("summary_result")
+        risk = cached.get("risk_result")
+        sug = cached.get("review_suggestions_result")
+        pi = cached.get("pr_info")
+        if pi and summary:
+            report_md = _build_report_md(lang, pi, summary, risk, sug)
+            st.download_button(
+                t(lang, "export_btn"), data=report_md,
+                file_name=t(lang, "export_filename"), mime="text/markdown",
+                use_container_width=True,
+            )
+
+    if st.button(t(lang, "clear_history"), use_container_width=True):
+        st.session_state["analysis_history"] = []
         st.rerun()
 
-# ---------------------------------------------------------------------------
-# Main — hero
-# ---------------------------------------------------------------------------
+# ====================================================================
+# MAIN PAGE
+# ====================================================================
 
 st.markdown(f'<div class="prlens-hero"><h1>{t(lang, "title")}</h1></div>', unsafe_allow_html=True)
 st.markdown(f'<p class="prlens-muted">{t(lang, "subtitle")}</p>', unsafe_allow_html=True)
 
-# ---------------------------------------------------------------------------
-# Main — input
-# ---------------------------------------------------------------------------
-
+# Input card
 st.markdown('<div class="prlens-card">', unsafe_allow_html=True)
 pr_url = st.text_input(
     t(lang, "pr_url_label"),
     placeholder=t(lang, "pr_url_placeholder"),
     key="pr_url_input",
-    label_visibility="visible",
 )
 cc1, cc2 = st.columns([1, 4])
 with cc1:
     analyze_clicked = st.button(t(lang, "analyze_btn"), type="primary", use_container_width=True)
 st.markdown('</div>', unsafe_allow_html=True)
 
-# ---------------------------------------------------------------------------
+# ====================================================================
 # Analyze
-# ---------------------------------------------------------------------------
+# ====================================================================
 
 if analyze_clicked:
     if not pr_url.strip():
         st.warning(t(lang, "err_parse"))
     else:
+        analysis_mode = st.session_state.get("analysis_mode", "standard")
+        do_risk = analysis_mode in ("standard", "full")
+        do_suggestions = analysis_mode == "full"
+
+        summary_result = None
+        risk_result = None
+        review_suggestions_result = None
+
         try:
             with st.status(t(lang, "ph_parsing"), expanded=True) as status:
                 status.write(f"✓ {t(lang, 'ph_parsing')}")
@@ -488,48 +603,45 @@ if analyze_clicked:
 
                 status.write(f"⏳ {t(lang, 'ph_fetching_info')}")
                 github_token = os.getenv("GITHUB_TOKEN") or None
-                pr_info = fetch_pr_info(
-                    parsed.owner, parsed.repo, parsed.pull_number, token=github_token
-                )
+                pr_info = fetch_pr_info(parsed.owner, parsed.repo, parsed.pull_number, token=github_token)
                 status.write(f"✓ {t(lang, 'ph_fetching_info')}")
 
                 status.write(f"⏳ {t(lang, 'ph_fetching_files')}")
-                changed_files = fetch_pr_files(
-                    parsed.owner, parsed.repo, parsed.pull_number, token=github_token
-                )
+                changed_files = fetch_pr_files(parsed.owner, parsed.repo, parsed.pull_number, token=github_token)
                 status.write(f"✓ {t(lang, 'ph_fetching_files')}")
 
                 status.write(f"✓ {t(lang, 'ph_building_diff')}")
                 diff_context = build_diff_context(changed_files)
-
                 llm_config = load_llm_config_from_env()
 
                 status.write(f"⏳ {t(lang, 'ph_summary')}")
-                summary_result = generate_pr_summary(
-                    pr_info, diff_context, llm_config,
-                    output_language=output_language,
-                )
+                summary_result = generate_pr_summary(pr_info, diff_context, llm_config, output_language=output_language)
                 status.write(f"✓ {t(lang, 'ph_summary')}")
 
-                status.write(f"⏳ {t(lang, 'ph_risk')}")
-                risk_result = analyze_pr_risks(
-                    pr_info, diff_context, llm_config,
-                    output_language=output_language,
-                )
-                status.write(f"✓ {t(lang, 'ph_risk')}")
+                if do_risk:
+                    status.write(f"⏳ {t(lang, 'ph_risk')}")
+                    risk_result = analyze_pr_risks(pr_info, diff_context, llm_config, output_language=output_language)
+                    status.write(f"✓ {t(lang, 'ph_risk')}")
 
-                status.write(f"⏳ {t(lang, 'ph_suggestions')}")
-                review_suggestions_result = generate_review_suggestions(
-                    pr_info=pr_info,
-                    diff_context=diff_context,
-                    risk_result=risk_result,
-                    llm_config=llm_config,
-                    output_language=output_language,
-                )
-                status.write(f"✓ {t(lang, 'ph_suggestions')}")
+                if do_suggestions and risk_result and risk_result.risk_items:
+                    status.write(f"⏳ {t(lang, 'ph_suggestions')}")
+                    review_suggestions_result = generate_review_suggestions(
+                        pr_info=pr_info, diff_context=diff_context,
+                        risk_result=risk_result, llm_config=llm_config,
+                        output_language=output_language,
+                    )
+                    status.write(f"✓ {t(lang, 'ph_suggestions')}")
+                elif do_suggestions:
+                    review_suggestions_result = generate_review_suggestions(
+                        pr_info=pr_info, diff_context=diff_context,
+                        risk_result=risk_result, llm_config=llm_config,
+                        output_language=output_language,
+                    )
+                    status.write(f"✓ {t(lang, 'ph_suggestions')}")
+
                 status.update(label=t(lang, "ph_done"), state="complete")
 
-            st.session_state["analysis_result"] = {
+            result_data = {
                 "pr_info": pr_info,
                 "changed_files": changed_files,
                 "diff_context": diff_context,
@@ -537,7 +649,25 @@ if analyze_clicked:
                 "risk_result": risk_result,
                 "review_suggestions_result": review_suggestions_result,
             }
+            st.session_state["analysis_result"] = result_data
             st.session_state["result_lang"] = output_language
+            st.session_state["result_from_history"] = False
+
+            risk_level = risk_result.overall_risk_level if risk_result else None
+            risk_count = len(risk_result.risk_items) if risk_result and risk_result.risk_items else 0
+            _add_to_history({
+                "url": pr_url,
+                "owner": parsed.owner, "repo": parsed.repo,
+                "pull_number": parsed.pull_number,
+                "title": pr_info.title,
+                "status": format_pr_status(pr_info, lang),
+                "risk_level": risk_level,
+                "risk_count": risk_count,
+                "language": output_language,
+                "analysis_mode": analysis_mode,
+                "created_at": time.strftime("%H:%M:%S"),
+                "result": result_data,
+            })
 
         except PRUrlParseError:
             st.error(t(lang, "err_parse"))
@@ -572,19 +702,12 @@ if cached:
     review_suggestions_result = cached["review_suggestions_result"]
 
     result_lang = st.session_state.get("result_lang", lang)
-    if result_lang != output_language:
-        st.info(t(lang, "lang_stale_notice"))
+    from_history = st.session_state.get("result_from_history", False)
 
-    # Export button — only when results exist
-    with st.sidebar:
-        report_md = _build_report_md(lang, pr_info, summary_result, risk_result, review_suggestions_result)
-        st.download_button(
-            t(lang, "export_btn"),
-            data=report_md,
-            file_name=t(lang, "export_filename"),
-            mime="text/markdown",
-            use_container_width=True,
-        )
+    if from_history:
+        st.info(t(lang, "history_restored"))
+        if result_lang != output_language:
+            st.info(t(lang, "lang_stale"))
 
     # ---------- PR Overview ----------
     st.subheader(t(lang, "pr_overview"))
@@ -655,20 +778,16 @@ if cached:
     if risk_result:
         st.subheader(t(lang, "risk_title"))
         badge = (
-            f'<span class="{_risk_level_badge_class(risk_result.overall_risk_level)}">'
-            f'{_risk_level_label(risk_result.overall_risk_level, lang)}</span>'
+            f'<span class="{_badge_class(risk_result.overall_risk_level)}">'
+            f'{_risk_label(risk_result.overall_risk_level, lang)}</span>'
         )
         st.markdown(f"{t(lang, 'risk_level')}: {badge}", unsafe_allow_html=True)
-
         if not risk_result.risk_items:
             st.info(t(lang, "risk_none_found"))
         else:
             sorted_risks = sorted(risk_result.risk_items, key=lambda r: SEVERITY_ORDER.get(r.severity, 99))
             for i, ri in enumerate(sorted_risks, 1):
-                sev_badge = (
-                    f'<span class="{_risk_level_badge_class(ri.severity)}">'
-                    f'{_risk_level_label(ri.severity, lang)}</span>'
-                )
+                sev_badge = f'<span class="{_badge_class(ri.severity)}">{_risk_label(ri.severity, lang)}</span>'
                 with st.expander(f"{t(lang, 'risk_item_label')} {i}: {ri.risk_type} - {ri.file_path}  {sev_badge}"):
                     st.markdown(f"**{t(lang, 'file_label')}:** `{ri.file_path or t(lang, 'na')}`")
                     st.markdown(f"**{t(lang, 'evidence_label')}:** {ri.evidence or t(lang, 'na')}")
@@ -676,13 +795,15 @@ if cached:
                     st.markdown(f"**{t(lang, 'impact_label')}:** {ri.impact or t(lang, 'na')}")
                     st.markdown(f"**{t(lang, 'suggestion_label')}:** {ri.suggestion or t(lang, 'na')}")
                     st.caption(f"{t(lang, 'confidence_label')}: {ri.confidence} | {t(lang, 'need_human_label')}: {t(lang, 'yes') if ri.need_human_check else t(lang, 'no')}")
-
         if risk_result.limitations:
             st.markdown(f"**{t(lang, 'limitations_label')}**")
             for item in risk_result.limitations:
                 st.markdown(f"- {item}")
         else:
             st.caption(f"{t(lang, 'limitations_label')}: {t(lang, 'none')}")
+    else:
+        st.subheader(t(lang, "risk_title"))
+        st.info(t(lang, "mode_fast_risk_note"))
 
     # ---------- Review Suggestions ----------
     if review_suggestions_result:
@@ -692,10 +813,7 @@ if cached:
         else:
             sorted_sugs = sorted(review_suggestions_result.suggestions, key=lambda s: PRIORITY_ORDER.get(s.priority, 99))
             for i, sug in enumerate(sorted_sugs, 1):
-                prio_badge = (
-                    f'<span class="{_risk_level_badge_class(sug.priority)}">'
-                    f'{sug.priority.upper()}</span>'
-                )
+                prio_badge = f'<span class="{_badge_class(sug.priority)}">{sug.priority.upper()}</span>'
                 with st.expander(f"{t(lang, 'sug_item_label')} {i}: {sug.title}  {prio_badge}"):
                     st.markdown(f"**{t(lang, 'file_label')}:** `{sug.file_path or t(lang, 'na')}`")
                     st.markdown(f"**{t(lang, 'sug_problem')}:** {sug.problem or t(lang, 'na')}")
@@ -705,13 +823,19 @@ if cached:
                     st.caption(f"{t(lang, 'sug_source_type')}: {sug.source_risk_type or t(lang, 'na')} | {t(lang, 'need_human_label')}: {t(lang, 'yes') if sug.need_human_check else t(lang, 'no')}")
                     st.markdown(f"**{t(lang, 'sug_copy_label')}:**")
                     st.text_area("", value=sug.copy_text, height=120, key=f"copy_{i}", label_visibility="collapsed")
-
         if review_suggestions_result.limitations:
             st.markdown(f"**{t(lang, 'limitations_label')}**")
             for item in review_suggestions_result.limitations:
                 st.markdown(f"- {item}")
         else:
             st.caption(f"{t(lang, 'limitations_label')}: {t(lang, 'none')}")
+    else:
+        st.subheader(t(lang, "sug_title"))
+        analysis_mode = st.session_state.get("analysis_mode", "standard")
+        if analysis_mode == "fast":
+            st.info(t(lang, "mode_fast_sug_note"))
+        else:
+            st.info(t(lang, "mode_standard_sug_note"))
 
 # ---------------------------------------------------------------------------
 # Footer
