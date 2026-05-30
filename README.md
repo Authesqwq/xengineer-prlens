@@ -36,6 +36,7 @@ PRLens 是一个面向开发者的 AI PR Review 助手。用户输入 GitHub PR 
 - PR10: Risk analyzer added
 - PR11: Risk analysis integrated into demo
 - PR12: Review suggestion generator added
+- PR13: Review suggestions integrated into demo
 
 ## Run Tests
 
@@ -53,7 +54,7 @@ pytest -q
 streamlit run app.py
 ```
 
-The demo currently calls the LLM twice: once for change summary and once for risk analysis.
+The demo may call the LLM up to three times: once for change summary, once for risk analysis, and once for review suggestions. If no risk items are found, review suggestion generation may skip the third call.
 
 ## Environment Variables
 

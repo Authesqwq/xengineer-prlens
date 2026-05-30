@@ -23,6 +23,10 @@ from src.llm_client import (
 )
 from src.summary_analyzer import SummaryAnalyzerError, generate_pr_summary
 from src.risk_analyzer import RiskAnalyzerError, analyze_pr_risks
+from src.review_suggestion import (
+    ReviewSuggestionError,
+    generate_review_suggestions,
+)
 
 load_dotenv()
 
@@ -65,6 +69,7 @@ if analyze_clicked:
     else:
         summary_result = None
         risk_result = None
+        review_suggestions_result = None
 
         try:
             # ---------- Phase 1: Parse URL ----------
@@ -99,6 +104,15 @@ if analyze_clicked:
             # ---------- Phase 6: Analyze risks ----------
             with st.spinner("Analyzing risks..."):
                 risk_result = analyze_pr_risks(pr_info, diff_context, llm_config)
+
+            # ---------- Phase 7: Generate review suggestions ----------
+            with st.spinner("Generating review suggestions..."):
+                review_suggestions_result = generate_review_suggestions(
+                    pr_info=pr_info,
+                    diff_context=diff_context,
+                    risk_result=risk_result,
+                    llm_config=llm_config,
+                )
 
             st.success("Analysis complete!")
 
@@ -233,6 +247,52 @@ if analyze_clicked:
                     "repository-level context. Please verify before using it as review feedback."
                 )
 
+            # ====== Review Suggestions ======
+            if review_suggestions_result:
+                st.subheader("Review Suggestions")
+
+                if not review_suggestions_result.suggestions:
+                    st.info(
+                        "No review suggestions were generated because no concrete "
+                        "risk items were found. Please still review the PR manually."
+                    )
+                else:
+                    priority_order = {"high": 0, "medium": 1, "low": 2}
+                    sorted_suggestions = sorted(
+                        review_suggestions_result.suggestions,
+                        key=lambda s: priority_order.get(s.priority, 99),
+                    )
+
+                    for i, sug in enumerate(sorted_suggestions, 1):
+                        prio_emoji = {"high": "🔴", "medium": "🟡", "low": "🟢"}.get(sug.priority, "⚪")
+                        with st.expander(
+                            f"Suggestion {i}: {prio_emoji} [{sug.priority.upper()}] {sug.title}"
+                        ):
+                            st.markdown(f"**File:** `{sug.file_path or 'N/A'}`")
+                            st.markdown(f"**Problem:** {sug.problem or 'N/A'}")
+                            st.markdown(f"**Evidence:** {sug.evidence or 'N/A'}")
+                            st.markdown(f"**Impact:** {sug.impact or 'N/A'}")
+                            st.markdown(f"**Suggestion:** {sug.suggestion or 'N/A'}")
+                            st.caption(
+                                f"Source Risk Type: {sug.source_risk_type or 'N/A'} | "
+                                f"Need human check: {'Yes' if sug.need_human_check else 'No'}"
+                            )
+                            st.markdown("**Copyable Review Comment:**")
+                            st.code(sug.copy_text, language="markdown")
+
+                # Limitations
+                st.markdown("**Limitations**")
+                if review_suggestions_result.limitations:
+                    for item in review_suggestions_result.limitations:
+                        st.markdown(f"- {item}")
+                else:
+                    st.caption("None")
+
+                st.info(
+                    "Review suggestions are drafts generated from PR diff and risk "
+                    "analysis. Please verify them before posting as code review comments."
+                )
+
         except PRUrlParseError as e:
             st.error(f"Unable to parse PR URL: {e}")
             st.info("Please enter a valid GitHub Pull Request URL, e.g. `https://github.com/owner/repo/pull/123`")
@@ -248,6 +308,8 @@ if analyze_clicked:
             st.error(f"Summary generation error: {e}")
         except RiskAnalyzerError as e:
             st.error(f"Risk analysis error: {e}")
+        except ReviewSuggestionError as e:
+            st.error(f"Review suggestion error: {e}")
         except ValueError as e:
             st.error(f"Input error: {e}")
         except Exception as e:
