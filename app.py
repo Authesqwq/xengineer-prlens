@@ -381,16 +381,14 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Language switcher — in main flow, below title
+st.markdown(f'<p class="prlens-muted">{t("en", "subtitle")}</p>', unsafe_allow_html=True)
+
 lang_choice = st.selectbox(
-    t("en", "lang_label"), ["中文", "English"],
+    "语言 / Language", ["中文", "English"],
     key="lang_select",
-    help="Switch between Chinese and English interface",
 )
 lang = "zh" if lang_choice == "中文" else "en"
 output_language = "zh" if lang == "zh" else "en"
-
-st.markdown(f'<p class="prlens-muted">{t(lang, "subtitle")}</p>', unsafe_allow_html=True)
 
 # ---------------------------------------------------------------------------
 # Input card
@@ -507,6 +505,85 @@ if analyze_clicked:
         except Exception as e:
             st.error(t(lang, "err_unexpected") + f"\n\n({e})")
             cached = None
+
+
+# ---------------------------------------------------------------------------
+# Report builder (export helper)
+# ---------------------------------------------------------------------------
+
+def _build_report_md(lang: str, pr_info, summary_result, risk_result, review_suggestions_result) -> str:
+    lines = [t(lang, "export_heading"), ""]
+
+    lines.append(t(lang, "export_overview"))
+    lines.append(t(lang, "export_title_row", title=pr_info.title))
+    lines.append(t(lang, "export_status_row", status=format_pr_status(pr_info, lang)))
+    lines.append(t(lang, "export_author_row", author=pr_info.author))
+    lines.append(t(lang, "export_files_row", files=pr_info.changed_files))
+    lines.append(t(lang, "export_additions_row", additions=pr_info.additions))
+    lines.append(t(lang, "export_deletions_row", deletions=pr_info.deletions))
+    lines.append(t(lang, "export_commits_row", commits=pr_info.commits))
+    lines.append("")
+
+    if summary_result:
+        lines.append(t(lang, "export_summary_title"))
+        lines.append(t(lang, "export_summary"))
+        lines.append(summary_result.summary)
+        lines.append("")
+        lines.append(t(lang, "export_main_changes"))
+        for item in _none_if_empty(summary_result.main_changes, lang):
+            lines.append(f"- {item}")
+        lines.append("")
+        lines.append(t(lang, "export_affected_areas"))
+        for item in _none_if_empty(summary_result.affected_areas, lang):
+            lines.append(f"- {item}")
+        lines.append("")
+        lines.append(t(lang, "export_uncertainties"))
+        for item in _none_if_empty(summary_result.uncertainties, lang):
+            lines.append(f"- {item}")
+        lines.append("")
+
+    if risk_result:
+        lines.append(t(lang, "export_risk_title"))
+        level = _risk_level_label(risk_result.overall_risk_level, lang)
+        lines.append(t(lang, "export_risk_level", level=level))
+        lines.append("")
+        if risk_result.risk_items:
+            lines.append(t(lang, "export_risk_items"))
+            for i, ri in enumerate(risk_result.risk_items, 1):
+                lines.append(f"**{i}.** [{ri.severity}] {ri.risk_type} - `{ri.file_path}`")
+                lines.append(f"- Evidence: {ri.evidence}")
+                lines.append(f"- Explanation: {ri.explanation}")
+                lines.append(f"- Impact: {ri.impact or 'N/A'}")
+                lines.append(f"- Suggestion: {ri.suggestion}")
+                lines.append(f"- Confidence: {ri.confidence} | Need human check: {'Yes' if ri.need_human_check else 'No'}")
+                lines.append("")
+        else:
+            lines.append(t(lang, "export_risk_none"))
+            lines.append("")
+        if risk_result.limitations:
+            lines.append(t(lang, "export_risk_limitations"))
+            for item in risk_result.limitations:
+                lines.append(f"- {item}")
+            lines.append("")
+
+    if review_suggestions_result:
+        lines.append(t(lang, "export_sug_title"))
+        if review_suggestions_result.suggestions:
+            for i, sug in enumerate(review_suggestions_result.suggestions, 1):
+                lines.append(f"**{i}.** [{sug.priority}] {sug.title}")
+                lines.append(f"- File: `{sug.file_path}`")
+                lines.append(f"- Problem: {sug.problem}")
+                lines.append(f"- Evidence: {sug.evidence}")
+                lines.append(f"- Suggestion: {sug.suggestion}")
+                lines.append(f"- Copyable Comment: {sug.copy_text}")
+                lines.append("")
+        else:
+            lines.append(t(lang, "export_sug_none"))
+            lines.append("")
+
+    lines.append(t(lang, "export_footer"))
+    return "\n".join(lines)
+
 
 # ====================================================================
 # Results display — from cache or live
@@ -661,88 +738,6 @@ if cached:
         else:
             st.caption(f"{t(lang, 'limitations_label')}: {t(lang, 'none')}")
 
-
-# ---------------------------------------------------------------------------
-# Report builder (export helper)
-# ---------------------------------------------------------------------------
-
-def _build_report_md(lang: str, pr_info, summary_result, risk_result, review_suggestions_result) -> str:
-    lines = [t(lang, "export_heading"), ""]
-
-    lines.append(t(lang, "export_overview"))
-    lines.append(t(lang, "export_title_row", title=pr_info.title))
-    lines.append(t(lang, "export_status_row", status=format_pr_status(pr_info, lang)))
-    lines.append(t(lang, "export_author_row", author=pr_info.author))
-    lines.append(t(lang, "export_files_row", files=pr_info.changed_files))
-    lines.append(t(lang, "export_additions_row", additions=pr_info.additions))
-    lines.append(t(lang, "export_deletions_row", deletions=pr_info.deletions))
-    lines.append(t(lang, "export_commits_row", commits=pr_info.commits))
-    lines.append("")
-
-    if summary_result:
-        lines.append(t(lang, "export_summary_title"))
-        lines.append(t(lang, "export_summary"))
-        lines.append(summary_result.summary)
-        lines.append("")
-        lines.append(t(lang, "export_main_changes"))
-        for item in _none_if_empty(summary_result.main_changes, lang):
-            lines.append(f"- {item}")
-        lines.append("")
-        lines.append(t(lang, "export_affected_areas"))
-        for item in _none_if_empty(summary_result.affected_areas, lang):
-            lines.append(f"- {item}")
-        lines.append("")
-        lines.append(t(lang, "export_uncertainties"))
-        for item in _none_if_empty(summary_result.uncertainties, lang):
-            lines.append(f"- {item}")
-        lines.append("")
-
-    if risk_result:
-        lines.append(t(lang, "export_risk_title"))
-        level = _risk_level_label(risk_result.overall_risk_level, lang)
-        lines.append(t(lang, "export_risk_level", level=level))
-        lines.append("")
-        if risk_result.risk_items:
-            lines.append(t(lang, "export_risk_items"))
-            for i, ri in enumerate(risk_result.risk_items, 1):
-                lines.append(f"**{i}.** [{ri.severity}] {ri.risk_type} — `{ri.file_path}`")
-                lines.append(f"- Evidence: {ri.evidence}")
-                lines.append(f"- Explanation: {ri.explanation}")
-                lines.append(f"- Impact: {ri.impact or 'N/A'}")
-                lines.append(f"- Suggestion: {ri.suggestion}")
-                lines.append(f"- Confidence: {ri.confidence} | Need human check: {'Yes' if ri.need_human_check else 'No'}")
-                lines.append("")
-        else:
-            lines.append(t(lang, "export_risk_none"))
-            lines.append("")
-        if risk_result.limitations:
-            lines.append(t(lang, "export_risk_limitations"))
-            for item in risk_result.limitations:
-                lines.append(f"- {item}")
-            lines.append("")
-
-    if review_suggestions_result:
-        lines.append(t(lang, "export_sug_title"))
-        if review_suggestions_result.suggestions:
-            for i, sug in enumerate(review_suggestions_result.suggestions, 1):
-                lines.append(f"**{i}.** [{sug.priority}] {sug.title}")
-                lines.append(f"- File: `{sug.file_path}`")
-                lines.append(f"- Problem: {sug.problem}")
-                lines.append(f"- Evidence: {sug.evidence}")
-                lines.append(f"- Suggestion: {sug.suggestion}")
-                lines.append(f"- Copyable Comment: {sug.copy_text}")
-                lines.append("")
-        else:
-            lines.append(t(lang, "export_sug_none"))
-            lines.append("")
-
-    lines.append(t(lang, "export_footer"))
-    return "\n".join(lines)
-
-
-# ---------------------------------------------------------------------------
-# Footer
-# ---------------------------------------------------------------------------
 
 st.divider()
 st.markdown(f'<p class="prlens-muted" style="font-size:0.82rem;">{t(lang, "footer")}</p>', unsafe_allow_html=True)
