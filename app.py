@@ -178,7 +178,9 @@ T: dict[str, dict[str, str]] = {
         "included": "已纳入",
         "skipped": "已跳过",
         "truncated": "已截断",
-        "chars": "字符数",
+        "chars": "字符数变化",
+        "chars_original": "原始字符数",
+        "chars_processed": "处理后字符数",
         "truncated_warning": "Diff 上下文已截断——本次分析仅覆盖部分文件。",
         "warnings_empty": "无",
         "summary_title": "AI 变更总结",
@@ -335,7 +337,9 @@ T: dict[str, dict[str, str]] = {
         "included": "Included",
         "skipped": "Skipped",
         "truncated": "Truncated",
-        "chars": "Chars",
+        "chars": "Character Count Change",
+        "chars_original": "Original Characters",
+        "chars_processed": "Processed Characters",
         "truncated_warning": "Diff context was truncated -- analysis covers partial files only.",
         "warnings_empty": "None",
         "summary_title": "AI Change Summary",
@@ -948,12 +952,16 @@ if cached:
             st.caption(t(lang, "more_files", n=len(changed_files) - 50))
 
     with st.expander(t(lang, "diff_title"), expanded=False):
-        dcols = st.columns(5)
+        dcols = st.columns(4)
         dcols[0].metric(t(lang, "total_files"), diff_context.total_files)
         dcols[1].metric(t(lang, "included"), diff_context.included_files)
         dcols[2].metric(t(lang, "skipped"), diff_context.skipped_files)
         dcols[3].metric(t(lang, "truncated"), diff_context.truncated_files)
-        dcols[4].metric(t(lang, "chars"), f"{diff_context.original_total_chars} -> {diff_context.processed_total_chars}")
+        st.markdown(f"**{t(lang, 'chars')}**")
+        st.markdown(
+            f"{t(lang, 'chars_original')}: {diff_context.original_total_chars}  "
+            f"→  {t(lang, 'chars_processed')}: {diff_context.processed_total_chars}"
+        )
         if diff_context.was_truncated:
             st.warning(t(lang, "truncated_warning"))
         if diff_context.warnings:
