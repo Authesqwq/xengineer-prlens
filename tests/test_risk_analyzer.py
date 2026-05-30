@@ -132,6 +132,17 @@ class TestBuildRiskMessages:
         msgs = build_risk_messages(FakePRInfo(), dc)
         assert "Diff context warnings" not in msgs[1]["content"]
 
+    def test_zh_language_in_system_prompt(self):
+        msgs = build_risk_messages(FakePRInfo(), FakeDiffContext(), output_language="zh")
+        system = msgs[0]["content"]
+        assert "Simplified Chinese" in system
+
+    def test_en_language_default(self):
+        msgs = build_risk_messages(FakePRInfo(), FakeDiffContext())
+        system = msgs[0]["content"]
+        assert "Simplified Chinese" not in system
+        assert "English" in system
+
 
 # ---------------------------------------------------------------------------
 # parse_risk_response
@@ -406,3 +417,16 @@ class TestAnalyzePRRisksRetry:
             retry_msgs = mock_cc.call_args_list[1][0][0]
             user_followup = retry_msgs[-1]["content"]
             assert "previous response was empty" in user_followup.lower()
+
+    def test_empty_content_fallback_chinese(self):
+        from src.risk_analyzer import _build_empty_content_fallback
+        result = _build_empty_content_fallback("", output_language="zh")
+        assert result.overall_risk_level == "low"
+        assert len(result.limitations) == 3
+        assert any("空内容" in lim for lim in result.limitations)
+        assert any("人工审查" in lim for lim in result.limitations)
+
+    def test_empty_content_fallback_english(self):
+        from src.risk_analyzer import _build_empty_content_fallback
+        result = _build_empty_content_fallback("", output_language="en")
+        assert any("empty content" in lim.lower() for lim in result.limitations)

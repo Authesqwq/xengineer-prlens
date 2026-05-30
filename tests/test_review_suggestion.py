@@ -140,6 +140,21 @@ class TestBuildMessages:
         msgs = build_review_suggestion_messages(FakePRInfo(), FakeDiffContext(), FakeRiskResult())
         assert "Limited context" in msgs[1]["content"]
 
+    def test_zh_language_in_system_prompt(self):
+        msgs = build_review_suggestion_messages(
+            FakePRInfo(), FakeDiffContext(), FakeRiskResult(), output_language="zh"
+        )
+        system = msgs[0]["content"]
+        assert "Simplified Chinese" in system
+
+    def test_en_language_default(self):
+        msgs = build_review_suggestion_messages(
+            FakePRInfo(), FakeDiffContext(), FakeRiskResult()
+        )
+        system = msgs[0]["content"]
+        assert "Simplified Chinese" not in system
+        assert "English" in system
+
 
 # ---------------------------------------------------------------------------
 # parse_review_suggestions_response
@@ -299,3 +314,23 @@ class TestGenerateSuggestions:
             _make_config(),
         )
         assert result.raw_response == ""
+
+    def test_no_risk_items_chinese_limitation(self):
+        result = generate_review_suggestions(
+            FakePRInfo(),
+            FakeDiffContext(),
+            FakeRiskResult(risk_items=[]),
+            _make_config(),
+            output_language="zh",
+        )
+        assert "风险" in result.limitations[0]
+
+    def test_no_risk_items_english_limitation(self):
+        result = generate_review_suggestions(
+            FakePRInfo(),
+            FakeDiffContext(),
+            FakeRiskResult(risk_items=[]),
+            _make_config(),
+            output_language="en",
+        )
+        assert "No review suggestions" in result.limitations[0]

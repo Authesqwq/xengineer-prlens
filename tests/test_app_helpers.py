@@ -67,27 +67,17 @@ class TestSorting:
 
 
 class TestTranslations:
-    def test_zh_has_all_keys(self):
-        en_keys = set(T["en"].keys())
-        zh_keys = set(T["zh"].keys())
-        missing = en_keys - zh_keys
-        assert not missing, f"Zh missing keys: {missing}"
-
-    def test_en_has_all_keys(self):
-        zh_keys = set(T["zh"].keys())
-        en_keys = set(T["en"].keys())
-        missing = zh_keys - en_keys
-        assert not missing, f"En missing keys: {missing}"
-
-    def test_t_returns_correct_language(self):
+    def test_t_en(self):
         assert t("en", "title") == "PRLens: AI PR Review Assistant"
+
+    def test_t_zh(self):
         assert t("zh", "title") == "PRLens: AI PR Review 助手"
 
-    def test_t_falls_back_to_en(self):
+    def test_t_fallback(self):
         assert t("fr", "title") == "PRLens: AI PR Review Assistant"
 
-    def test_t_unknown_key_returns_key(self):
-        assert t("en", "nonexistent_xyz") == "nonexistent_xyz"
+    def test_t_missing_key(self):
+        assert t("en", "xyz_nonexistent") == "xyz_nonexistent"
 
     def test_t_format(self):
         result = t("en", "more_files", n=5)

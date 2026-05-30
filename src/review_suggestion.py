@@ -84,8 +84,19 @@ Format:
 }"""
 
 
+def _language_instruction(lang: str) -> str:
+    if lang == "zh":
+        return (
+            "Write title, problem, evidence, impact, suggestion, copy_text, and "
+            "limitations in Simplified Chinese when possible. Keep file_path, "
+            "source_risk_type, priority, schema keys, code identifiers, and GitHub "
+            "labels unchanged. copy_text should be a Chinese review comment draft."
+        )
+    return "Write all natural language fields in English."
+
+
 def build_review_suggestion_messages(
-    pr_info, diff_context, risk_result
+    pr_info, diff_context, risk_result, output_language: str = "en"
 ) -> list[dict[str, str]]:
     """Build OpenAI-compatible messages for review suggestion generation.
 
@@ -93,10 +104,13 @@ def build_review_suggestion_messages(
         pr_info: PRInfo object.
         diff_context: DiffContext object.
         risk_result: RiskAnalysisResult object.
+        output_language: "en" or "zh".
 
     Returns:
         List of message dicts with "role" and "content" keys.
     """
+    system_prompt = _SYSTEM_PROMPT + "\n" + _language_instruction(output_language)
+
     warning_text = ""
     if diff_context.warnings:
         warning_text = "Diff context warnings: " + "; ".join(diff_context.warnings) + "\n"
@@ -134,7 +148,7 @@ def build_review_suggestion_messages(
     )
 
     return [
-        {"role": "system", "content": _SYSTEM_PROMPT},
+        {"role": "system", "content": system_prompt},
         {"role": "user", "content": user_content},
     ]
 
@@ -266,13 +280,15 @@ def _suggestion_to_bool(value) -> bool:
 # Core function
 # ---------------------------------------------------------------------------
 
-_NO_RISK_LIMITATION = (
-    "No review suggestions were generated because no risk items were provided."
-)
+def _no_risk_limitation(lang: str) -> str:
+    if lang == "zh":
+        return "未生成 Review 建议，因为没有可转化为建议的具体风险项。"
+    return "No review suggestions were generated because no risk items were provided."
 
 
 def generate_review_suggestions(
-    pr_info, diff_context, risk_result, llm_config: LLMConfig
+    pr_info, diff_context, risk_result, llm_config: LLMConfig,
+    output_language: str = "en",
 ) -> ReviewSuggestionResult:
     """Generate structured review suggestions from risk analysis results.
 
@@ -284,6 +300,7 @@ def generate_review_suggestions(
         diff_context: DiffContext object.
         risk_result: RiskAnalysisResult object.
         llm_config: LLMConfig for the model call.
+        output_language: "en" or "zh".
 
     Returns:
         ReviewSuggestionResult with parsed suggestions.
@@ -295,10 +312,12 @@ def generate_review_suggestions(
     if not risk_result.risk_items:
         return ReviewSuggestionResult(
             suggestions=[],
-            limitations=[_NO_RISK_LIMITATION],
+            limitations=[_no_risk_limitation(output_language)],
             raw_response="",
         )
 
-    messages = build_review_suggestion_messages(pr_info, diff_context, risk_result)
+    messages = build_review_suggestion_messages(
+        pr_info, diff_context, risk_result, output_language=output_language
+    )
     response = chat_completion(messages, llm_config)
     return parse_review_suggestions_response(response.content)

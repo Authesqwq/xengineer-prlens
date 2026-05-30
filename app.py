@@ -37,11 +37,10 @@ load_dotenv()
 T: dict[str, dict[str, str]] = {
     "zh": {
         "title": "PRLens: AI PR Review 助手",
-        "subtitle": "输入一个公开 GitHub PR 链接，生成 AI 变更总结、风险分析和 Review 建议。",
+        "subtitle": "输入公开 GitHub PR 链接，生成 AI 变更总结、风险分析和 Review 建议。",
         "lang_label": "语言 / Language",
         "pr_url_label": "GitHub PR 链接",
-        "pr_url_placeholder": "https://github.com/octocat/Hello-World/pull/6",
-        "examples_heading": "示例",
+        "pr_url_placeholder": "请输入公开 GitHub PR 链接，例如：https://github.com/owner/repo/pull/123",
         "analyze_btn": "开始分析",
         "ph_parsing": "解析 PR 链接...",
         "ph_fetching_info": "获取 PR 基本信息...",
@@ -64,9 +63,9 @@ T: dict[str, dict[str, str]] = {
         "changed_files_title": "变更文件列表",
         "file": "文件",
         "status_col": "状态",
-        "plus": "新增",
-        "minus": "删除",
-        "delta": "变更",
+        "plus": "+",
+        "minus": "-",
+        "delta": "Δ",
         "patch_col": "Patch",
         "more_files": "... 还有 {n} 个文件",
         "diff_title": "Diff 上下文统计",
@@ -75,7 +74,7 @@ T: dict[str, dict[str, str]] = {
         "skipped": "已跳过",
         "truncated": "已截断",
         "chars": "字符数",
-        "truncated_warning": "Diff 上下文已截断——本次分析仅覆盖部分文件。",
+        "truncated_warning": "Diff 上下文已截断——分析仅覆盖部分文件。",
         "warnings_label": "警告",
         "warnings_empty": "无",
         "summary_title": "AI 变更总结",
@@ -83,6 +82,7 @@ T: dict[str, dict[str, str]] = {
         "affected_areas": "影响范围",
         "uncertainties": "不确定项",
         "none": "无",
+        "na": "不适用",
         "risk_title": "风险分析",
         "risk_level": "总体风险等级",
         "risk_none_found": "模型未发现明显风险，但仍建议人工审查该 PR。",
@@ -94,6 +94,8 @@ T: dict[str, dict[str, str]] = {
         "suggestion_label": "建议",
         "confidence_label": "置信度",
         "need_human_label": "需人工确认",
+        "yes": "是",
+        "no": "否",
         "limitations_label": "限制说明",
         "risk_disclaimer": "风险分析仅基于 PR diff 生成，可能遗漏仓库级上下文。请在使用前进行人工验证。",
         "sug_title": "Review 建议",
@@ -102,13 +104,8 @@ T: dict[str, dict[str, str]] = {
         "sug_problem": "问题",
         "sug_source_type": "来源风险类型",
         "sug_copy_label": "可复制 Review 评论",
-        "sug_disclaimer": "Review 建议由 PR diff 和风险分析生成，仅为草稿。请在作为 Review 评论发布前进行人工验证。",
-        "sidebar_about": "关于 PRLens",
-        "sidebar_desc": "PRLens 基于 GitHub API 返回的 PR 标题、描述、变更文件和 diff 进行分析。可能遗漏仓库级上下文、运行时行为、隐藏依赖和项目特定的 Review 规则。",
-        "sidebar_no_write": "本 Demo 不会向 GitHub 写入评论。",
-        "sidebar_calls": "LLM 调用",
-        "sidebar_calls_desc": "Demo 最多调用 LLM 三次：变更总结、风险分析和 Review 建议。如果未发现风险项，Review 建议将跳过第三次调用。",
-        "err_parse": "无法解析 PR 链接。请输入有效的 GitHub PR URL，例如 `https://github.com/owner/repo/pull/123`",
+        "sug_disclaimer": "Review 建议由 PR diff 和风险分析生成仅为草稿。请在作为 Review 评论发布前进行人工验证。",
+        "err_parse": "无法解析 PR 链接。请输入有效的 GitHub PR URL，例如：`https://github.com/owner/repo/pull/123`",
         "err_github": "获取 PR 数据失败。请检查 PR 是否存在、仓库是否公开或 GitHub Token 是否有效。",
         "err_llm_config": "LLM 配置缺失。请在 `.env` 中设置 LLM_API_KEY、LLM_MODEL 和 LLM_BASE_URL。",
         "err_llm": "LLM 请求失败。请重试或检查模型供应商状态。",
@@ -117,6 +114,7 @@ T: dict[str, dict[str, str]] = {
         "err_suggestion": "Review 建议生成失败。请重试或检查模型输出格式。",
         "err_input": "输入错误。",
         "err_unexpected": "未知错误。",
+        "placeholder_empty": "（空）",
         "footer": "PRLens — AI PR Review 助手 | 本地 Demo",
     },
     "en": {
@@ -124,8 +122,7 @@ T: dict[str, dict[str, str]] = {
         "subtitle": "Enter a public GitHub PR URL to generate an AI-powered change summary, risk analysis, and review suggestions.",
         "lang_label": "语言 / Language",
         "pr_url_label": "GitHub PR URL",
-        "pr_url_placeholder": "https://github.com/octocat/Hello-World/pull/6",
-        "examples_heading": "Examples",
+        "pr_url_placeholder": "Enter a public GitHub PR URL, e.g. https://github.com/owner/repo/pull/123",
         "analyze_btn": "Analyze",
         "ph_parsing": "Parsing PR URL...",
         "ph_fetching_info": "Fetching PR info...",
@@ -167,6 +164,7 @@ T: dict[str, dict[str, str]] = {
         "affected_areas": "Affected Areas",
         "uncertainties": "Uncertainties",
         "none": "None",
+        "na": "N/A",
         "risk_title": "Risk Analysis",
         "risk_level": "Overall Risk Level",
         "risk_none_found": "No obvious risks were found by the model. Please still review the PR manually.",
@@ -178,6 +176,8 @@ T: dict[str, dict[str, str]] = {
         "suggestion_label": "Suggestion",
         "confidence_label": "Confidence",
         "need_human_label": "Need human check",
+        "yes": "Yes",
+        "no": "No",
         "limitations_label": "Limitations",
         "risk_disclaimer": "Risk analysis is generated from PR diff only and may miss repository-level context. Please verify before using it as review feedback.",
         "sug_title": "Review Suggestions",
@@ -187,11 +187,6 @@ T: dict[str, dict[str, str]] = {
         "sug_source_type": "Source Risk Type",
         "sug_copy_label": "Copyable Review Comment",
         "sug_disclaimer": "Review suggestions are drafts generated from PR diff and risk analysis. Please verify them before posting as code review comments.",
-        "sidebar_about": "About PRLens",
-        "sidebar_desc": "PRLens analyzes PR title, description, changed files, and diff returned by the GitHub API. It may miss repository-level context, runtime behavior, hidden dependencies, and project-specific review rules.",
-        "sidebar_no_write": "This demo does not write comments back to GitHub.",
-        "sidebar_calls": "LLM Calls",
-        "sidebar_calls_desc": "The demo may call the LLM up to three times: change summary, risk analysis, and review suggestions. If no risk items are found, review suggestion generation skips the third call.",
         "err_parse": "Unable to parse PR URL. Please enter a valid GitHub PR URL, e.g. `https://github.com/owner/repo/pull/123`",
         "err_github": "Failed to fetch PR data. Please check whether the PR exists, the repository is public, or your GitHub token is valid.",
         "err_llm_config": "Missing LLM configuration. Please set LLM_API_KEY, LLM_MODEL, and LLM_BASE_URL in `.env`.",
@@ -201,6 +196,7 @@ T: dict[str, dict[str, str]] = {
         "err_suggestion": "Review suggestion generation failed. Please retry or check model output format.",
         "err_input": "Input error.",
         "err_unexpected": "Unexpected error.",
+        "placeholder_empty": "(empty)",
         "footer": "PRLens -- AI PR Review Assistant | Local Demo",
     },
 }
@@ -222,12 +218,6 @@ SEVERITY_EMOJI = {"high": "🔴", "medium": "🟡", "low": "🟢"}
 
 PRIORITY_ORDER = {"high": 0, "medium": 1, "low": 2}
 PRIORITY_EMOJI = {"high": "🔴", "medium": "🟡", "low": "🟢"}
-
-EXAMPLE_PRS = [
-    "https://github.com/octocat/Hello-World/pull/6",
-    "https://github.com/fastapi/fastapi/pull/12000",
-    "https://github.com/psf/requests/pull/6500",
-]
 
 
 def format_pr_status(pr_info) -> str:
@@ -252,55 +242,28 @@ def _none_if_empty(items):
 
 st.set_page_config(page_title="PRLens", page_icon="🔍", layout="wide")
 
-# -- Language picker in sidebar top --
-with st.sidebar:
-    lang = st.selectbox("语言 / Language", ["zh", "en"], format_func=lambda v: "中文" if v == "zh" else "English")
-    st.divider()
+# Language selector
+lang_choice = st.selectbox(
+    "语言 / Language", ["中文", "English"],
+    label_visibility="collapsed",
+)
+lang = "zh" if lang_choice == "中文" else "en"
+output_language = "zh" if lang == "zh" else "en"
 
 # ---------------------------------------------------------------------------
-# Title & intro
+# Title & input
 # ---------------------------------------------------------------------------
 
 st.title(t(lang, "title"))
 st.caption(t(lang, "subtitle"))
 
-# ---------------------------------------------------------------------------
-# Input area
-# ---------------------------------------------------------------------------
-
-# Preserve existing URL in session state when switching language
-if "pr_url_value" not in st.session_state:
-    st.session_state.pr_url_value = ""
-
 pr_url = st.text_input(
     t(lang, "pr_url_label"),
-    value=st.session_state.pr_url_value,
     placeholder=t(lang, "pr_url_placeholder"),
     key="pr_url_input",
 )
-st.session_state.pr_url_value = pr_url
-
-# Lightweight example buttons
-st.caption(t(lang, "examples_heading"))
-cols = st.columns(len(EXAMPLE_PRS))
-for i, example_url in enumerate(EXAMPLE_PRS):
-    label = example_url.replace("https://github.com/", "")
-    if cols[i].button(label, key=f"example_{i}", use_container_width=True):
-        st.session_state.pr_url_value = example_url
-        st.rerun()
 
 analyze_clicked = st.button(t(lang, "analyze_btn"), type="primary")
-
-# ---------------------------------------------------------------------------
-# Sidebar -- capability info
-# ---------------------------------------------------------------------------
-
-with st.sidebar:
-    st.markdown(f"### {t(lang, 'sidebar_about')}")
-    st.markdown(t(lang, "sidebar_desc"))
-    st.info(t(lang, "sidebar_no_write"))
-    st.markdown(f"### {t(lang, 'sidebar_calls')}")
-    st.markdown(t(lang, "sidebar_calls_desc"))
 
 # ---------------------------------------------------------------------------
 # Analyze handler
@@ -336,10 +299,16 @@ if analyze_clicked:
                 llm_config = load_llm_config_from_env()
 
                 status.write(t(lang, "ph_summary"))
-                summary_result = generate_pr_summary(pr_info, diff_context, llm_config)
+                summary_result = generate_pr_summary(
+                    pr_info, diff_context, llm_config,
+                    output_language=output_language,
+                )
 
                 status.write(t(lang, "ph_risk"))
-                risk_result = analyze_pr_risks(pr_info, diff_context, llm_config)
+                risk_result = analyze_pr_risks(
+                    pr_info, diff_context, llm_config,
+                    output_language=output_language,
+                )
 
                 status.write(t(lang, "ph_suggestions"))
                 review_suggestions_result = generate_review_suggestions(
@@ -347,6 +316,7 @@ if analyze_clicked:
                     diff_context=diff_context,
                     risk_result=risk_result,
                     llm_config=llm_config,
+                    output_language=output_language,
                 )
 
                 status.update(label=t(lang, "ph_done"), state="complete")
@@ -457,14 +427,14 @@ if analyze_clicked:
                         with st.expander(
                             f"{t(lang, 'risk_item_label')} {i}: {sev_emoji} [{ri.severity.upper()}] {ri.risk_type} -- {ri.file_path}"
                         ):
-                            st.markdown(f"**{t(lang, 'file_label')}:** `{ri.file_path or 'N/A'}`")
-                            st.markdown(f"**{t(lang, 'evidence_label')}:** {ri.evidence or 'N/A'}")
-                            st.markdown(f"**{t(lang, 'explanation_label')}:** {ri.explanation or 'N/A'}")
-                            st.markdown(f"**{t(lang, 'impact_label')}:** {ri.impact or 'N/A'}")
-                            st.markdown(f"**{t(lang, 'suggestion_label')}:** {ri.suggestion or 'N/A'}")
+                            st.markdown(f"**{t(lang, 'file_label')}:** `{ri.file_path or t(lang, 'na')}`")
+                            st.markdown(f"**{t(lang, 'evidence_label')}:** {ri.evidence or t(lang, 'na')}")
+                            st.markdown(f"**{t(lang, 'explanation_label')}:** {ri.explanation or t(lang, 'na')}")
+                            st.markdown(f"**{t(lang, 'impact_label')}:** {ri.impact or t(lang, 'na')}")
+                            st.markdown(f"**{t(lang, 'suggestion_label')}:** {ri.suggestion or t(lang, 'na')}")
                             st.caption(
                                 f"{t(lang, 'confidence_label')}: {ri.confidence} | "
-                                f"{t(lang, 'need_human_label')}: {'Yes' if ri.need_human_check else 'No'}"
+                                f"{t(lang, 'need_human_label')}: {t(lang, 'yes') if ri.need_human_check else t(lang, 'no')}"
                             )
 
                 st.markdown(f"**{t(lang, 'limitations_label')}**")
@@ -494,14 +464,14 @@ if analyze_clicked:
                         with st.expander(
                             f"{t(lang, 'sug_item_label')} {i}: {prio_emoji} [{sug.priority.upper()}] {sug.title}"
                         ):
-                            st.markdown(f"**{t(lang, 'file_label')}:** `{sug.file_path or 'N/A'}`")
-                            st.markdown(f"**{t(lang, 'sug_problem')}:** {sug.problem or 'N/A'}")
-                            st.markdown(f"**{t(lang, 'evidence_label')}:** {sug.evidence or 'N/A'}")
-                            st.markdown(f"**{t(lang, 'impact_label')}:** {sug.impact or 'N/A'}")
-                            st.markdown(f"**{t(lang, 'suggestion_label')}:** {sug.suggestion or 'N/A'}")
+                            st.markdown(f"**{t(lang, 'file_label')}:** `{sug.file_path or t(lang, 'na')}`")
+                            st.markdown(f"**{t(lang, 'sug_problem')}:** {sug.problem or t(lang, 'na')}")
+                            st.markdown(f"**{t(lang, 'evidence_label')}:** {sug.evidence or t(lang, 'na')}")
+                            st.markdown(f"**{t(lang, 'impact_label')}:** {sug.impact or t(lang, 'na')}")
+                            st.markdown(f"**{t(lang, 'suggestion_label')}:** {sug.suggestion or t(lang, 'na')}")
                             st.caption(
-                                f"{t(lang, 'sug_source_type')}: {sug.source_risk_type or 'N/A'} | "
-                                f"{t(lang, 'need_human_label')}: {'Yes' if sug.need_human_check else 'No'}"
+                                f"{t(lang, 'sug_source_type')}: {sug.source_risk_type or t(lang, 'na')} | "
+                                f"{t(lang, 'need_human_label')}: {t(lang, 'yes') if sug.need_human_check else t(lang, 'no')}"
                             )
                             st.markdown(f"**{t(lang, 'sug_copy_label')}:**")
                             st.code(sug.copy_text, language="markdown")

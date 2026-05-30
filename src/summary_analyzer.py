@@ -52,16 +52,31 @@ JSON arrays. If there is no item, return [].
 Do not use alternative field names such as overview, pr_summary, change_summary, or result."""
 
 
-def build_summary_messages(pr_info, diff_context) -> list[dict[str, str]]:
+def _language_instruction(lang: str) -> str:
+    if lang == "zh":
+        return (
+            "Write all natural language fields in Simplified Chinese. "
+            "Keep file paths, code identifiers, GitHub labels, action names, "
+            "branch names, and schema keys unchanged. The fields summary, "
+            "main_changes, affected_areas, and uncertainties must use Chinese "
+            "natural language when possible."
+        )
+    return "Write all natural language fields in English."
+
+
+def build_summary_messages(pr_info, diff_context, output_language: str = "en") -> list[dict[str, str]]:
     """Build OpenAI-compatible messages for summary generation.
 
     Args:
         pr_info: PRInfo object from github_client.
         diff_context: DiffContext object from diff_processor.
+        output_language: "en" or "zh" — language for natural language output.
 
     Returns:
         List of message dicts with "role" and "content" keys.
     """
+    system_prompt = _SYSTEM_PROMPT + "\n" + _language_instruction(output_language)
+
     user_content = (
         f"PR Title: {pr_info.title}\n"
         f"PR Body: {pr_info.body or '(empty)'}\n"
@@ -74,7 +89,7 @@ def build_summary_messages(pr_info, diff_context) -> list[dict[str, str]]:
     )
 
     return [
-        {"role": "system", "content": _SYSTEM_PROMPT},
+        {"role": "system", "content": system_prompt},
         {"role": "user", "content": user_content},
     ]
 
@@ -216,13 +231,15 @@ def parse_summary_response(content: str) -> SummaryResult:
 # ---------------------------------------------------------------------------
 
 
-def generate_pr_summary(pr_info, diff_context, llm_config: LLMConfig) -> SummaryResult:
+def generate_pr_summary(pr_info, diff_context, llm_config: LLMConfig,
+                        output_language: str = "en") -> SummaryResult:
     """Generate a PR change summary using the LLM.
 
     Args:
         pr_info: PRInfo object.
         diff_context: DiffContext object.
         llm_config: LLMConfig for the model call.
+        output_language: "en" or "zh".
 
     Returns:
         SummaryResult with the parsed summary.
@@ -231,6 +248,6 @@ def generate_pr_summary(pr_info, diff_context, llm_config: LLMConfig) -> Summary
         SummaryAnalyzerError / SummaryResponseParseError: On parse failures.
         LLMClientError / subclasses: On API failures (passed through).
     """
-    messages = build_summary_messages(pr_info, diff_context)
+    messages = build_summary_messages(pr_info, diff_context, output_language=output_language)
     response = chat_completion(messages, llm_config)
     return parse_summary_response(response.content)

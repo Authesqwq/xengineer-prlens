@@ -106,6 +106,17 @@ class TestBuildSummaryMessages:
         msgs = build_summary_messages(FakePRInfo(body=""), FakeDiffContext())
         assert "(empty)" in msgs[1]["content"]
 
+    def test_default_language_is_english(self):
+        msgs = build_summary_messages(FakePRInfo(), FakeDiffContext())
+        system = msgs[0]["content"]
+        assert "Simplified Chinese" not in system
+        assert "English" in system
+
+    def test_zh_language_prompt_injection(self):
+        msgs = build_summary_messages(FakePRInfo(), FakeDiffContext(), output_language="zh")
+        system = msgs[0]["content"]
+        assert "Simplified Chinese" in system
+
 
 # ---------------------------------------------------------------------------
 # parse_summary_response

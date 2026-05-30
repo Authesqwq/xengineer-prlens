@@ -110,16 +110,30 @@ Format:
 }"""
 
 
-def build_risk_messages(pr_info, diff_context) -> list[dict[str, str]]:
+def _language_instruction(lang: str) -> str:
+    if lang == "zh":
+        return (
+            "Write explanation, impact, suggestion, evidence, and limitations in "
+            "Simplified Chinese when possible. Keep risk_type, severity, confidence, "
+            "file_path, code identifiers, and schema keys unchanged. If no obvious "
+            "risk is found, write limitations in Chinese."
+        )
+    return "Write all natural language fields in English."
+
+
+def build_risk_messages(pr_info, diff_context, output_language: str = "en") -> list[dict[str, str]]:
     """Build OpenAI-compatible messages for risk analysis.
 
     Args:
         pr_info: PRInfo object from github_client.
         diff_context: DiffContext object from diff_processor.
+        output_language: "en" or "zh".
 
     Returns:
         List of message dicts with "role" and "content" keys.
     """
+    system_prompt = _SYSTEM_PROMPT + "\n" + _language_instruction(output_language)
+
     warning_text = ""
     if diff_context.warnings:
         warning_text = "Diff context warnings: " + "; ".join(diff_context.warnings) + "\n"
@@ -137,7 +151,7 @@ def build_risk_messages(pr_info, diff_context) -> list[dict[str, str]]:
     )
 
     return [
-        {"role": "system", "content": _SYSTEM_PROMPT},
+        {"role": "system", "content": system_prompt},
         {"role": "user", "content": user_content},
     ]
 
@@ -150,15 +164,23 @@ def build_risk_messages(pr_info, diff_context) -> list[dict[str, str]]:
 _FENCE_PATTERN = re.compile(r"```(?:json)?\s*([\s\S]*?)```", re.IGNORECASE)
 
 
-def _build_empty_content_fallback(raw_response: str = "") -> RiskAnalysisResult:
-    return RiskAnalysisResult(
-        overall_risk_level="low",
-        risk_items=[],
-        limitations=[
+def _build_empty_content_fallback(raw_response: str = "", output_language: str = "en") -> RiskAnalysisResult:
+    if output_language == "zh":
+        limitations = [
+            "模型在风险分析阶段返回了空内容。",
+            "分析仅基于 PR diff，可能遗漏仓库级上下文。",
+            "请仍然进行人工审查。",
+        ]
+    else:
+        limitations = [
             "Model returned empty content during risk analysis.",
             "Analysis is based only on PR diff and may miss repository-level context.",
             "Please review the PR manually.",
-        ],
+        ]
+    return RiskAnalysisResult(
+        overall_risk_level="low",
+        risk_items=[],
+        limitations=limitations,
         raw_response=raw_response,
     )
 
@@ -294,7 +316,8 @@ def _to_bool(value) -> bool:
 # ---------------------------------------------------------------------------
 
 
-def analyze_pr_risks(pr_info, diff_context, llm_config: LLMConfig) -> RiskAnalysisResult:
+def analyze_pr_risks(pr_info, diff_context, llm_config: LLMConfig,
+                     output_language: str = "en") -> RiskAnalysisResult:
     """Analyze PR diff for potential risks using the LLM.
 
     If the model returns empty content, a retry is attempted once. If the
@@ -305,6 +328,7 @@ def analyze_pr_risks(pr_info, diff_context, llm_config: LLMConfig) -> RiskAnalys
         pr_info: PRInfo object.
         diff_context: DiffContext object.
         llm_config: LLMConfig for the model call.
+        output_language: "en" or "zh".
 
     Returns:
         RiskAnalysisResult with parsed risk items.
@@ -313,13 +337,13 @@ def analyze_pr_risks(pr_info, diff_context, llm_config: LLMConfig) -> RiskAnalys
         RiskAnalyzerError / RiskResponseParseError: On non-empty-content parse failures.
         LLMClientError / subclasses: On API failures (except empty content).
     """
-    messages = build_risk_messages(pr_info, diff_context)
+    messages = build_risk_messages(pr_info, diff_context, output_language=output_language)
 
     def _try_analyze(msgs):
         try:
             response = chat_completion(msgs, llm_config)
             if not response.content or not response.content.strip():
-                return None  # signal retry
+                return None
             return parse_risk_response(response.content, allow_empty_fallback=False)
         except LLMResponseError as exc:
             if _is_empty_content_error(exc):
@@ -334,7 +358,6 @@ def analyze_pr_risks(pr_info, diff_context, llm_config: LLMConfig) -> RiskAnalys
     if result is not None:
         return result
 
-    # Retry once with explicit instruction
     retry_messages = messages + [
         {
             "role": "user",
@@ -351,5 +374,5 @@ def analyze_pr_risks(pr_info, diff_context, llm_config: LLMConfig) -> RiskAnalys
         return parse_risk_response(retry_response.content, allow_empty_fallback=True)
     except (LLMResponseError, RiskResponseParseError) as exc:
         if _is_empty_content_error(exc):
-            return _build_empty_content_fallback("")
+            return _build_empty_content_fallback("", output_language=output_language)
         raise
