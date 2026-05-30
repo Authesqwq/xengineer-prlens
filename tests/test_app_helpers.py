@@ -2,7 +2,14 @@
 
 from dataclasses import dataclass
 
-from app import _none_if_empty, format_pr_status, PRIORITY_ORDER, SEVERITY_ORDER
+from app import (
+    PRIORITY_ORDER,
+    SEVERITY_ORDER,
+    T,
+    _none_if_empty,
+    format_pr_status,
+    t,
+)
 
 
 @dataclass
@@ -57,3 +64,31 @@ class TestSorting:
         ]
         result = sorted(items, key=lambda s: PRIORITY_ORDER.get(s.priority, 99))
         assert [s.priority for s in result] == ["high", "medium", "low"]
+
+
+class TestTranslations:
+    def test_zh_has_all_keys(self):
+        en_keys = set(T["en"].keys())
+        zh_keys = set(T["zh"].keys())
+        missing = en_keys - zh_keys
+        assert not missing, f"Zh missing keys: {missing}"
+
+    def test_en_has_all_keys(self):
+        zh_keys = set(T["zh"].keys())
+        en_keys = set(T["en"].keys())
+        missing = zh_keys - en_keys
+        assert not missing, f"En missing keys: {missing}"
+
+    def test_t_returns_correct_language(self):
+        assert t("en", "title") == "PRLens: AI PR Review Assistant"
+        assert t("zh", "title") == "PRLens: AI PR Review 助手"
+
+    def test_t_falls_back_to_en(self):
+        assert t("fr", "title") == "PRLens: AI PR Review Assistant"
+
+    def test_t_unknown_key_returns_key(self):
+        assert t("en", "nonexistent_xyz") == "nonexistent_xyz"
+
+    def test_t_format(self):
+        result = t("en", "more_files", n=5)
+        assert "... and 5 more files" in result
