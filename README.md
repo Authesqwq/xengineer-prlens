@@ -22,6 +22,18 @@ PRLens 是一个面向开发者的 AI PR Review 助手。用户输入 GitHub PR 
 8. 示例 PR 与错误处理
 9. README 和 Demo 指南完善
 
+## Current Progress
+
+- PR1: Project initialized
+- PR2: AI product documents added
+- PR3: GitHub PR URL parser added
+
+## Run Tests
+
+```bash
+pytest
+```
+
 ## 当前状态
 
 当前 PR 仅完成项目初始化和最小可运行页面。后续功能将在独立 PR 中逐步实现。
