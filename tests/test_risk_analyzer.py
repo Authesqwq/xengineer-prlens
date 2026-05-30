@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 import pytest
 
-from src.llm_client import LLMConfig, LLMResponse
+from src.llm_client import LLMConfig, LLMResponse, LLMResponseError
 from src.risk_analyzer import (
     RiskAnalysisResult,
     RiskItem,
@@ -307,3 +307,102 @@ class TestAnalyzePRRisks:
             assert mock_cc.call_args[0][1] == cfg
             messages = mock_cc.call_args[0][0]
             assert len(messages) == 2
+
+
+# ---------------------------------------------------------------------------
+# parse_risk_response — empty content fallback
+# ---------------------------------------------------------------------------
+
+
+class TestParseRiskResponseEmptyFallback:
+    def test_empty_without_fallback_raises(self):
+        with pytest.raises(RiskResponseParseError):
+            parse_risk_response("", allow_empty_fallback=False)
+
+    def test_empty_with_fallback_returns_fallback(self):
+        result = parse_risk_response("", allow_empty_fallback=True)
+        assert result.overall_risk_level == "low"
+        assert result.risk_items == []
+        assert len(result.limitations) > 0
+        assert any("empty content" in lim.lower() for lim in result.limitations)
+        assert result.raw_response == ""
+
+    def test_whitespace_only_with_fallback_returns_fallback(self):
+        result = parse_risk_response("   ", allow_empty_fallback=True)
+        assert result.overall_risk_level == "low"
+        assert result.risk_items == []
+
+    def test_fallback_raw_response_preserved(self):
+        result = parse_risk_response("", allow_empty_fallback=True)
+        assert result.raw_response == ""
+
+
+# ---------------------------------------------------------------------------
+# analyze_pr_risks — empty content fallback
+# ---------------------------------------------------------------------------
+
+
+class TestAnalyzePRRisksEmptyFallback:
+    def test_empty_content_string_returns_fallback(self):
+        resp = _make_response("")
+        with patch("src.risk_analyzer.chat_completion", return_value=resp) as mock_cc:
+            result = analyze_pr_risks(FakePRInfo(), FakeDiffContext(), _make_config())
+            assert result.overall_risk_level == "low"
+            assert result.risk_items == []
+            assert any("empty content" in lim.lower() for lim in result.limitations)
+            # First call returns empty → triggers retry → both empty → fallback
+            assert mock_cc.call_count == 2
+
+    def test_empty_content_exception_returns_fallback(self):
+        from unittest.mock import patch as upatch
+        with upatch("src.risk_analyzer.chat_completion") as mock_cc:
+            mock_cc.side_effect = LLMResponseError("Model returned empty content.")
+            result = analyze_pr_risks(FakePRInfo(), FakeDiffContext(), _make_config())
+            assert result.overall_risk_level == "low"
+            assert result.risk_items == []
+            assert any("empty content" in lim.lower() for lim in result.limitations)
+
+    def test_non_empty_exception_does_not_fallback(self):
+        from unittest.mock import patch as upatch
+        with upatch("src.risk_analyzer.chat_completion") as mock_cc:
+            mock_cc.side_effect = LLMResponseError("Invalid response format")
+            with pytest.raises(LLMResponseError):
+                analyze_pr_risks(FakePRInfo(), FakeDiffContext(), _make_config())
+
+
+# ---------------------------------------------------------------------------
+# analyze_pr_risks — retry logic
+# ---------------------------------------------------------------------------
+
+
+class TestAnalyzePRRisksRetry:
+    def test_first_empty_second_normal_returns_second(self):
+        import json
+        empty_resp = _make_response("")
+        normal_resp = _make_response(json.dumps(_sample_risk_json()))
+        with patch("src.risk_analyzer.chat_completion",
+                   side_effect=[empty_resp, normal_resp]) as mock_cc:
+            result = analyze_pr_risks(FakePRInfo(), FakeDiffContext(), _make_config())
+            assert result.overall_risk_level == "medium"
+            assert len(result.risk_items) == 1
+            assert mock_cc.call_count == 2
+
+    def test_both_empty_returns_fallback(self):
+        empties = [_make_response(""), _make_response("")]
+        with patch("src.risk_analyzer.chat_completion", side_effect=empties) as mock_cc:
+            result = analyze_pr_risks(FakePRInfo(), FakeDiffContext(), _make_config())
+            assert result.overall_risk_level == "low"
+            assert result.risk_items == []
+            assert any("empty content" in lim.lower() for lim in result.limitations)
+            assert mock_cc.call_count == 2
+
+    def test_retry_messages_include_fallback_instruction(self):
+        with patch("src.risk_analyzer.chat_completion") as mock_cc:
+            mock_cc.side_effect = [
+                LLMResponseError("Model returned empty content."),
+                _make_response('{"overall_risk_level":"low","risk_items":[],"limitations":[]}'),
+            ]
+            analyze_pr_risks(FakePRInfo(), FakeDiffContext(), _make_config())
+            retry_msgs = mock_cc.call_args_list[1][0][0]
+            user_followup = retry_msgs[-1]["content"]
+            assert "previous response was empty" in user_followup.lower()
