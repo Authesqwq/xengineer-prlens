@@ -64,6 +64,8 @@ _RISK_REQUIRED_FIELDS = [
 
 _UNWRAP_KEYS = ["result", "data", "risk_result"]
 
+_FENCE_PATTERN = re.compile(r"```(?:json)?\s*([\s\S]*?)```", re.IGNORECASE)
+
 
 # ---------------------------------------------------------------------------
 # Prompt construction
@@ -79,8 +81,11 @@ empty risk_items. Every risk must contain evidence. Annotate confidence and \
 need_human_check for each item.
 
 Return only valid JSON. Do not return empty content.
-Do not include markdown outside the JSON.
+Do not include markdown fences (```).
 Do not include explanations before or after the JSON.
+Do not use comments inside JSON.
+Use double quotes for all JSON keys and string values.
+Use true or false for boolean values. Do not use None, is, 否, Yes, No as booleans.
 If no obvious risks are found, return:
 {"overall_risk_level":"low","risk_items":[],"limitations":["No obvious risks were found from the provided diff."]}
 
@@ -115,10 +120,11 @@ def _language_instruction(lang: str) -> str:
         return (
             "Write explanation, impact, suggestion, evidence, and limitations in "
             "Simplified Chinese when possible. Keep risk_type, severity, confidence, "
-            "file_path, code identifiers, and schema keys unchanged. If no obvious "
-            "risk is found, write limitations in Chinese."
+            "file_path, code identifiers, and schema keys unchanged. Natural language "
+            "must use Chinese but JSON keys, enum values, and booleans must remain "
+            "valid JSON."
         )
-    return "Write all natural language fields in English."
+    return "Write all natural language fields in English. The response must remain valid JSON."
 
 
 def build_risk_messages(pr_info, diff_context, output_language: str = "en") -> list[dict[str, str]]:
@@ -157,26 +163,46 @@ def build_risk_messages(pr_info, diff_context, output_language: str = "en") -> l
 
 
 # ---------------------------------------------------------------------------
-# Response parsing
+# Fallback builders
 # ---------------------------------------------------------------------------
 
 
-_FENCE_PATTERN = re.compile(r"```(?:json)?\s*([\s\S]*?)```", re.IGNORECASE)
-
-
-def _build_empty_content_fallback(raw_response: str = "", output_language: str = "en") -> RiskAnalysisResult:
-    if output_language == "zh":
-        limitations = [
-            "模型在风险分析阶段返回了空内容。",
-            "分析仅基于 PR diff，可能遗漏仓库级上下文。",
-            "请仍然进行人工审查。",
-        ]
+def _build_risk_fallback(
+    raw_response: str = "",
+    output_language: str = "en",
+    reason: str = "model_output_invalid",
+) -> RiskAnalysisResult:
+    if reason == "empty_content":
+        if output_language == "zh":
+            limitations = [
+                "模型在风险分析阶段返回了空内容。",
+                "本次未生成具体风险项。",
+                "分析仅基于 PR diff，可能遗漏仓库级上下文。",
+                "请仍然进行人工审查。",
+            ]
+        else:
+            limitations = [
+                "Model returned empty content during risk analysis.",
+                "No risk items were generated.",
+                "Analysis is based only on PR diff and may miss repository-level context.",
+                "Please review the PR manually.",
+            ]
     else:
-        limitations = [
-            "Model returned empty content during risk analysis.",
-            "Analysis is based only on PR diff and may miss repository-level context.",
-            "Please review the PR manually.",
-        ]
+        if output_language == "zh":
+            limitations = [
+                "风险分析结果未能解析为合法 JSON。",
+                "本次未从模型输出中生成具体风险项。",
+                "分析仅基于 PR diff，可能遗漏仓库级上下文。",
+                "请仍然进行人工审查。",
+            ]
+        else:
+            limitations = [
+                "Risk analysis could not be parsed into valid JSON.",
+                "No risk items were generated from the model output.",
+                "Analysis is based only on PR diff and may miss repository-level context.",
+                "Please review the PR manually.",
+            ]
+
     return RiskAnalysisResult(
         overall_risk_level="low",
         risk_items=[],
@@ -190,12 +216,44 @@ def _is_empty_content_error(exc: Exception) -> bool:
     return ("empty content" in msg or "returned empty content" in msg)
 
 
-def parse_risk_response(content: str, allow_empty_fallback: bool = False) -> RiskAnalysisResult:
+def _build_retry_instruction(output_language: str, parse_error: str) -> str:
+    if output_language == "zh":
+        return (
+            "上一次输出无法解析为合法 JSON。"
+            "请重新输出，并且只输出一个 JSON 对象，不要输出 markdown，不要输出解释文字。"
+            "必须使用以下顶层字段: "
+            '{"overall_risk_level":"low","risk_items":[],"limitations":[]}。'
+            "如果没有发现明显风险，请返回: "
+            '{"overall_risk_level":"low","risk_items":[],'
+            '"limitations":["未从提供的 diff 中发现明显风险。"]}'
+        )
+    return (
+        "The previous output could not be parsed as valid JSON. "
+        "Return only one JSON object. Do not include markdown fences or extra explanation. "
+        "Use exactly these top-level fields: "
+        '{"overall_risk_level":"low","risk_items":[],"limitations":[]}. '
+        "If no obvious risk is found, return: "
+        '{"overall_risk_level":"low","risk_items":[],'
+        '"limitations":["No obvious risks were found from the provided diff."]}'
+    )
+
+
+# ---------------------------------------------------------------------------
+# Response parsing
+# ---------------------------------------------------------------------------
+
+
+def parse_risk_response(
+    content: str,
+    allow_empty_fallback: bool = False,
+    output_language: str = "en",
+) -> RiskAnalysisResult:
     """Parse model JSON output into RiskAnalysisResult.
 
     Args:
         content: Raw model output string.
         allow_empty_fallback: If True, return fallback for empty content instead of raising.
+        output_language: "en" or "zh" for fallback messages.
 
     Returns:
         RiskAnalysisResult with parsed fields.
@@ -206,7 +264,7 @@ def parse_risk_response(content: str, allow_empty_fallback: bool = False) -> Ris
     """
     if not content or not content.strip():
         if allow_empty_fallback:
-            return _build_empty_content_fallback(content)
+            return _build_risk_fallback(content, output_language=output_language, reason="empty_content")
         raise RiskResponseParseError("Model returned empty content.")
 
     text = content.strip()
@@ -251,7 +309,6 @@ def parse_risk_response(content: str, allow_empty_fallback: bool = False) -> Ris
 
 
 def _parse_risk_item(item: dict) -> RiskItem:
-    """Parse a single risk item dict into RiskItem, with defaults and validation."""
     if not isinstance(item, dict):
         raise RiskResponseParseError(f"Expected dict for risk item, got {type(item).__name__}")
 
@@ -287,7 +344,6 @@ def _parse_risk_item(item: dict) -> RiskItem:
 
 
 def _normalize_limitations(value) -> list[str]:
-    """Normalize the limitations field to a list of strings."""
     if value is None:
         return []
     if isinstance(value, list):
@@ -303,7 +359,6 @@ def _normalize_limitations(value) -> list[str]:
 
 
 def _to_bool(value) -> bool:
-    """Convert a value to bool, treating common falsy JSON patterns."""
     if isinstance(value, bool):
         return value
     if isinstance(value, str):
@@ -320,9 +375,8 @@ def analyze_pr_risks(pr_info, diff_context, llm_config: LLMConfig,
                      output_language: str = "en") -> RiskAnalysisResult:
     """Analyze PR diff for potential risks using the LLM.
 
-    If the model returns empty content, a retry is attempted once. If the
-    retry also returns empty content, a fallback low-risk result is returned
-    instead of raising an error.
+    Falls back gracefully on empty content or invalid JSON: retries once,
+    then returns a low-risk fallback result.
 
     Args:
         pr_info: PRInfo object.
@@ -331,48 +385,50 @@ def analyze_pr_risks(pr_info, diff_context, llm_config: LLMConfig,
         output_language: "en" or "zh".
 
     Returns:
-        RiskAnalysisResult with parsed risk items.
+        RiskAnalysisResult with parsed risk items or fallback.
 
     Raises:
-        RiskAnalyzerError / RiskResponseParseError: On non-empty-content parse failures.
-        LLMClientError / subclasses: On API failures (except empty content).
+        LLMClientError / subclasses: On auth, rate-limit, or network failures
+            (not on parse or empty-content failures).
     """
     messages = build_risk_messages(pr_info, diff_context, output_language=output_language)
 
-    def _try_analyze(msgs):
+    def _first_try():
         try:
-            response = chat_completion(msgs, llm_config)
-            if not response.content or not response.content.strip():
-                return None
-            return parse_risk_response(response.content, allow_empty_fallback=False)
+            response = chat_completion(messages, llm_config)
         except LLMResponseError as exc:
             if _is_empty_content_error(exc):
-                return None
+                return _build_risk_fallback("", output_language=output_language, reason="empty_content")
             raise
-        except RiskResponseParseError as exc:
+        if not response.content or not response.content.strip():
+            return _retry("empty_content", "empty_content")
+        try:
+            return parse_risk_response(
+                response.content,
+                allow_empty_fallback=True,
+                output_language=output_language,
+            )
+        except RiskResponseParseError as e:
+            return _retry(response.content, str(e))
+
+    def _retry(prev_content: str, reason: str):
+        instruction = _build_retry_instruction(output_language, reason)
+        retry_messages = messages + [{"role": "user", "content": instruction}]
+        try:
+            retry_response = chat_completion(retry_messages, llm_config)
+        except LLMResponseError as exc:
             if _is_empty_content_error(exc):
-                return None
+                return _build_risk_fallback(prev_content, output_language=output_language, reason="empty_content")
             raise
+        if not retry_response.content or not retry_response.content.strip():
+            return _build_risk_fallback(prev_content, output_language=output_language, reason="empty_content")
+        try:
+            return parse_risk_response(
+                retry_response.content,
+                allow_empty_fallback=True,
+                output_language=output_language,
+            )
+        except RiskResponseParseError:
+            return _build_risk_fallback(retry_response.content, output_language=output_language, reason="model_output_invalid")
 
-    result = _try_analyze(messages)
-    if result is not None:
-        return result
-
-    retry_messages = messages + [
-        {
-            "role": "user",
-            "content": (
-                "The previous response was empty. Return only the required JSON object. "
-                "If no obvious risk is found, return "
-                '{"overall_risk_level":"low","risk_items":[],'
-                '"limitations":["No obvious risks were found from the provided diff."]}'
-            ),
-        }
-    ]
-    try:
-        retry_response = chat_completion(retry_messages, llm_config)
-        return parse_risk_response(retry_response.content, allow_empty_fallback=True)
-    except (LLMResponseError, RiskResponseParseError) as exc:
-        if _is_empty_content_error(exc):
-            return _build_empty_content_fallback("", output_language=output_language)
-        raise
+    return _first_try()
