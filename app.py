@@ -37,23 +37,13 @@ load_dotenv()
 
 CSS = """
 <style>
-#MainMenu { display: none !important; }
-header[data-testid="stHeader"] { display: none !important; }
-footer { display: none !important; }
-[data-testid="stToolbar"] { display: none !important; }
-[data-testid="stStatusWidget"] { display: none !important; }
-button[title="View fullscreen"] { display: none !important; }
+#MainMenu { visibility: hidden; }
+footer { visibility: hidden; }
 
 .block-container { max-width: 1100px; padding-top: 1.5rem; padding-bottom: 3rem; }
 
 .prlens-hero { padding: 0.5rem 0 0.25rem 0; }
 .prlens-hero h1 { font-size: 2rem; font-weight: 700; margin: 0; }
-
-.prlens-card {
-    background: #ffffff; border: 1px solid #e5e7eb; border-radius: 16px;
-    padding: 20px 22px; margin: 14px 0;
-    box-shadow: 0 6px 18px rgba(15,23,42,0.04);
-}
 
 .prlens-muted { color: #64748b; font-size: 0.9rem; }
 .prlens-sidebar-title { font-size: 1.1rem; font-weight: 700; }
@@ -628,17 +618,15 @@ with st.sidebar:
 st.markdown(f'<div class="prlens-hero"><h1>{t(lang, "title")}</h1></div>', unsafe_allow_html=True)
 st.markdown(f'<p class="prlens-muted">{t(lang, "subtitle")}</p>', unsafe_allow_html=True)
 
-# Input card
-st.markdown('<div class="prlens-card">', unsafe_allow_html=True)
-pr_url = st.text_input(
-    t(lang, "pr_url_label"),
-    placeholder=t(lang, "pr_url_placeholder"),
-    key="pr_url_input",
-)
-cc1, cc2 = st.columns([1, 4])
-with cc1:
-    analyze_clicked = st.button(t(lang, "analyze_btn"), type="primary", use_container_width=True)
-st.markdown('</div>', unsafe_allow_html=True)
+with st.container(border=True):
+    pr_url = st.text_input(
+        t(lang, "pr_url_label"),
+        placeholder=t(lang, "pr_url_placeholder"),
+        key="pr_url_input",
+    )
+    cc1, _ = st.columns([1, 4])
+    with cc1:
+        analyze_clicked = st.button(t(lang, "analyze_btn"), type="primary", use_container_width=True)
 
 # ====================================================================
 # Analyze
