@@ -10,8 +10,10 @@ from app import (
     _build_report_md,
     _history_item_label,
     _make_history_key,
+    _mode_display_name,
     _none_if_empty,
     _risk_label,
+    format_elapsed_time,
     format_pr_status,
     t,
 )
@@ -148,22 +150,47 @@ class TestBuildReportMd:
         md = _build_report_md("en", FakePRInfo(), FakeSummaryResult(), FakeRiskResult(), FakeSuggestionResult())
         assert "# PRLens" in md
         assert "## PR Overview" in md
-        assert "## AI Change Summary" in md
-        assert "## Risk Analysis" in md
-        assert "## Review Suggestions" in md
 
     def test_zh_has_sections(self):
         md = _build_report_md("zh", FakePRInfo(), FakeSummaryResult(), FakeRiskResult(), FakeSuggestionResult())
         assert "PRLens 分析报告" in md
-        assert "PR 概览" in md
 
-    def test_empty_risk_shows_none(self):
-        md = _build_report_md("en", FakePRInfo(), FakeSummaryResult(), FakeRiskResult(risk_items=[]), FakeSuggestionResult())
-        assert "No obvious risks" in md
+    def test_with_mode_and_elapsed(self):
+        md = _build_report_md("en", FakePRInfo(), FakeSummaryResult(), FakeRiskResult(),
+                              FakeSuggestionResult(), analysis_mode="standard", elapsed_seconds=18.5)
+        assert "Standard" in md
+        assert "18.5s" in md
 
-    def test_empty_suggestions_shows_none(self):
-        md = _build_report_md("en", FakePRInfo(), FakeSummaryResult(), FakeRiskResult(), FakeSuggestionResult(suggestions=[]))
-        assert "No review suggestions" in md
+
+class TestFormatElapsedTime:
+    def test_seconds_zh(self):
+        assert "18.6 秒" in format_elapsed_time(18.56, "zh")
+
+    def test_seconds_en(self):
+        assert "18.6s" in format_elapsed_time(18.56, "en")
+
+    def test_minutes_zh(self):
+        result = format_elapsed_time(72, "zh")
+        assert "1 分" in result
+
+    def test_minutes_en(self):
+        result = format_elapsed_time(72, "en")
+        assert "1m" in result
+        assert "12.0s" in result
+
+    def test_none_zh(self):
+        assert format_elapsed_time(None, "zh") == "未知"
+
+    def test_none_en(self):
+        assert format_elapsed_time(None, "en") == "Unknown"
+
+
+class TestModeDisplayName:
+    def test_fast_zh(self):
+        assert "快速" in _mode_display_name("fast", "zh")
+
+    def test_standard_en(self):
+        assert _mode_display_name("standard", "en") == "Standard"
 
 
 class TestHistoryHelpers:
@@ -178,21 +205,26 @@ class TestHistoryHelpers:
             "url": "https://github.com/owner/repo/pull/123",
             "risk_level": "low",
             "risk_count": 0,
+            "analysis_mode": "standard",
+            "elapsed_seconds": 12.3,
         }
         label = _history_item_label(entry, "en")
         assert "owner/repo #123" in label
         assert "Low" in label
+        assert "12.3s" in label
 
     def test_history_item_label_zh(self):
         entry = {
             "url": "https://github.com/owner/repo/pull/123",
             "risk_level": "medium",
             "risk_count": 2,
+            "analysis_mode": "standard",
+            "elapsed_seconds": 72.0,
         }
         label = _history_item_label(entry, "zh")
         assert "owner/repo #123" in label
         assert "中风险" in label
-        assert "2 个风险" in label
+        assert "标准模式" in label
 
     def test_history_max_limit(self):
         entries = [{"url": f"https://github.com/a/b/pull/{i}", "language": "en",

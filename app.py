@@ -89,7 +89,20 @@ T: dict[str, dict[str, str]] = {
         "mode_fast": "快速模式",
         "mode_standard": "标准模式",
         "mode_full": "完整模式",
-        "mode_hint": "快速 1 次，标准约 2 次，完整最多 3 次模型调用。",
+        "mode_hint_fast": "仅生成变更总结，适合快速了解 PR 做了什么。",
+        "mode_hint_standard": "生成变更总结和风险分析，适合常规 Review 前的快速检查。",
+        "mode_hint_full": "生成变更总结、风险分析和 Review 建议，适合需要形成评论草稿的场景。",
+        "mode_runs": "执行内容",
+        "mode_skips": "不执行",
+        "mode_runs_summary": "AI 变更总结",
+        "mode_runs_risk": "风险分析",
+        "mode_runs_sug": "Review 建议",
+        "elapsed_format_s": "{sec:.1f} 秒",
+        "elapsed_format_ms": "{min:.0f} 分 {sec:.1f} 秒",
+        "elapsed_unknown": "未知",
+        "analysis_time": "用时 {time}",
+        "mode_colon": "模式",
+        "mode_display": "{mode}",
         "history_label": "历史记录",
         "history_empty": "暂无历史记录",
         "clear_history": "清空历史",
@@ -215,7 +228,20 @@ T: dict[str, dict[str, str]] = {
         "mode_fast": "Fast",
         "mode_standard": "Standard",
         "mode_full": "Full",
-        "mode_hint": "Fast uses 1 LLM call, Standard about 2, Full up to 3.",
+        "mode_hint_fast": "Generates only the change summary. Best for quickly understanding what the PR does.",
+        "mode_hint_standard": "Generates change summary and risk analysis. Best for a standard pre-review check.",
+        "mode_hint_full": "Generates change summary, risk analysis, and review suggestions. Best when you need review comment drafts.",
+        "mode_runs": "Will run",
+        "mode_skips": "Will skip",
+        "mode_runs_summary": "Change Summary",
+        "mode_runs_risk": "Risk Analysis",
+        "mode_runs_sug": "Review Suggestions",
+        "elapsed_format_s": "{sec:.1f}s",
+        "elapsed_format_ms": "{min:.0f}m {sec:.1f}s",
+        "elapsed_unknown": "Unknown",
+        "analysis_time": "{time}",
+        "mode_colon": "Mode",
+        "mode_display": "{mode}",
         "history_label": "History",
         "history_empty": "No history yet",
         "clear_history": "Clear History",
@@ -382,9 +408,14 @@ def _risk_label(level: str, lang: str) -> str:
 # Report builder
 # ---------------------------------------------------------------------------
 
-def _build_report_md(lang, pr_info, summary_result, risk_result, review_suggestions_result) -> str:
+def _build_report_md(lang, pr_info, summary_result, risk_result,
+                     review_suggestions_result, analysis_mode=None, elapsed_seconds=None) -> str:
     lines = [t(lang, "export_heading"), ""]
     lines.append(t(lang, "export_overview"))
+    if analysis_mode:
+        lines.append(f"- {t(lang, 'mode_colon')}: {_mode_display_name(analysis_mode, lang)}")
+    if elapsed_seconds is not None:
+        lines.append(f"- {t(lang, 'analysis_time', time=format_elapsed_time(elapsed_seconds, lang))}")
     lines.append(t(lang, "export_title_row", title=pr_info.title))
     lines.append(t(lang, "export_status_row", status=format_pr_status(pr_info, lang)))
     lines.append(t(lang, "export_author_row", author=pr_info.author))
@@ -464,18 +495,42 @@ def _add_to_history(entry: dict):
     st.session_state["analysis_history"] = history[:HISTORY_MAX]
 
 
+def format_elapsed_time(seconds, lang: str) -> str:
+    if seconds is None:
+        return t(lang, "elapsed_unknown")
+    s = float(seconds)
+    if s < 60:
+        return t(lang, "elapsed_format_s", sec=s)
+    m = int(s // 60)
+    sec = s % 60
+    return t(lang, "elapsed_format_ms", min=m, sec=sec)
+
+
+def _mode_hint_for_mode(mode_key: str, lang: str) -> str:
+    hints = {"fast": "mode_hint_fast", "standard": "mode_hint_standard", "full": "mode_hint_full"}
+    return t(lang, hints.get(mode_key, "mode_hint_standard"))
+
+
+def _mode_display_name(mode_key: str, lang: str) -> str:
+    names = {"fast": t(lang, "mode_fast"), "standard": t(lang, "mode_standard"), "full": t(lang, "mode_full")}
+    return names.get(mode_key, mode_key)
+
+
 def _history_item_label(entry: dict, lang: str) -> str:
     try:
         parsed = parse_github_pr_url(entry["url"])
         short = f"{parsed.owner}/{parsed.repo} #{parsed.pull_number}"
     except Exception:
         short = entry["url"]
+    parts = [short]
+    mode_key = entry.get("analysis_mode", "")
+    if mode_key:
+        parts.append(_mode_display_name(mode_key, lang))
     if entry.get("risk_level"):
-        level_text = _risk_label(entry["risk_level"], lang)
-        if entry.get("risk_count", 0) > 0:
-            return f"{short} · {level_text} · {t(lang, 'risks_count', n=entry['risk_count'])}"
-        return f"{short} · {level_text}"
-    return short
+        parts.append(_risk_label(entry["risk_level"], lang))
+    if entry.get("elapsed_seconds") is not None:
+        parts.append(format_elapsed_time(entry["elapsed_seconds"], lang))
+    return " · ".join(parts)
 
 
 # ---------------------------------------------------------------------------
@@ -521,7 +576,8 @@ with st.sidebar:
         label_visibility="collapsed",
     )
     st.session_state["analysis_mode"] = MODE_KEYS.get(selected_mode, "standard")
-    st.caption(t(lang, "mode_hint"))
+    mode_key = st.session_state["analysis_mode"]
+    st.caption(_mode_hint_for_mode(mode_key, lang))
 
     st.divider()
 
@@ -550,7 +606,11 @@ with st.sidebar:
         sug = cached.get("review_suggestions_result")
         pi = cached.get("pr_info")
         if pi and summary:
-            report_md = _build_report_md(lang, pi, summary, risk, sug)
+            report_md = _build_report_md(
+                lang, pi, summary, risk, sug,
+                analysis_mode=cached.get("analysis_mode"),
+                elapsed_seconds=cached.get("elapsed_seconds"),
+            )
             st.download_button(
                 t(lang, "export_btn"), data=report_md,
                 file_name=t(lang, "export_filename"), mime="text/markdown",
@@ -591,6 +651,7 @@ if analyze_clicked:
         analysis_mode = st.session_state.get("analysis_mode", "standard")
         do_risk = analysis_mode in ("standard", "full")
         do_suggestions = analysis_mode == "full"
+        start_time = time.perf_counter()
 
         summary_result = None
         risk_result = None
@@ -641,6 +702,8 @@ if analyze_clicked:
 
                 status.update(label=t(lang, "ph_done"), state="complete")
 
+            elapsed_seconds = time.perf_counter() - start_time
+
             result_data = {
                 "pr_info": pr_info,
                 "changed_files": changed_files,
@@ -648,6 +711,8 @@ if analyze_clicked:
                 "summary_result": summary_result,
                 "risk_result": risk_result,
                 "review_suggestions_result": review_suggestions_result,
+                "elapsed_seconds": elapsed_seconds,
+                "analysis_mode": analysis_mode,
             }
             st.session_state["analysis_result"] = result_data
             st.session_state["result_lang"] = output_language
@@ -666,6 +731,7 @@ if analyze_clicked:
                 "language": output_language,
                 "analysis_mode": analysis_mode,
                 "created_at": time.strftime("%H:%M:%S"),
+                "elapsed_seconds": elapsed_seconds,
                 "result": result_data,
             })
 
@@ -711,6 +777,11 @@ if cached:
 
     # ---------- PR Overview ----------
     st.subheader(t(lang, "pr_overview"))
+    elapsed = cached.get("elapsed_seconds")
+    analysis_mode = cached.get("analysis_mode", st.session_state.get("analysis_mode", "standard"))
+    if elapsed is not None:
+        time_str = format_elapsed_time(elapsed, lang)
+        st.caption(f"{t(lang, 'analysis_time', time=time_str)} · {t(lang, 'mode_colon')}: {_mode_display_name(analysis_mode, lang)}")
     st.markdown(f"**[{pr_info.title}]({pr_info.html_url})**")
     c_m = st.columns(6)
     c_m[0].metric(t(lang, "status"), format_pr_status(pr_info, lang))
