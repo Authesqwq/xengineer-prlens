@@ -37,6 +37,7 @@ PRLens 是一个面向开发者的 AI PR Review 助手。用户输入 GitHub PR 
 - PR11: Risk analysis integrated into demo
 - PR12: Review suggestion generator added
 - PR13: Review suggestions integrated into demo
+- PR14: Demo UX and stability improved
 
 ## Run Tests
 
@@ -55,6 +56,19 @@ streamlit run app.py
 ```
 
 The demo may call the LLM up to three times: once for change summary, once for risk analysis, and once for review suggestions. If no risk items are found, review suggestion generation may skip the third call.
+
+## Example PRs
+
+- https://github.com/octocat/Hello-World/pull/6
+- https://github.com/fastapi/fastapi/pull/12000
+- https://github.com/psf/requests/pull/6500
+
+## Current Limitations
+
+- The analysis is based on PR title, description, changed files, and diff only.
+- The app does not access full repository context.
+- The app does not write comments back to GitHub.
+- Risk analysis and review suggestions should be manually verified before use.
 
 ## Environment Variables
 
