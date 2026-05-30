@@ -174,22 +174,121 @@ class TestParseSummaryResponse:
         import json
         data = _sample_summary_json()
         del data["summary"]
-        with pytest.raises(SummaryResponseParseError, match="summary"):
+        with pytest.raises(SummaryResponseParseError, match="Available keys"):
             parse_summary_response(json.dumps(data))
 
-    def test_main_changes_not_list_raises(self):
+    def test_overview_alias_used_when_summary_missing(self):
         import json
-        data = _sample_summary_json(main_changes="not a list")
-        with pytest.raises(SummaryResponseParseError, match="main_changes"):
+        data = _sample_summary_json(overview="Changed login flow")
+        del data["summary"]
+        result = parse_summary_response(json.dumps(data))
+        assert result.summary == "Changed login flow"
+
+    def test_pr_summary_alias_used(self):
+        import json
+        data = _sample_summary_json(pr_summary="PR adds validation")
+        del data["summary"]
+        result = parse_summary_response(json.dumps(data))
+        assert result.summary == "PR adds validation"
+
+    def test_change_summary_alias_used(self):
+        import json
+        data = _sample_summary_json(change_summary="Refactored auth module")
+        del data["summary"]
+        result = parse_summary_response(json.dumps(data))
+        assert result.summary == "Refactored auth module"
+
+    def test_priority_order_summary_over_alias(self):
+        import json
+        data = _sample_summary_json(
+            summary="Primary",
+            overview="Should not be used",
+        )
+        result = parse_summary_response(json.dumps(data))
+        assert result.summary == "Primary"
+
+    def test_empty_summary_falls_back_to_overview(self):
+        import json
+        data = _sample_summary_json(summary="  ", overview="Real summary")
+        result = parse_summary_response(json.dumps(data))
+        assert result.summary == "Real summary"
+
+    def test_alias_value_not_string_raises(self):
+        import json
+        data = _sample_summary_json(overview=123)
+        del data["summary"]
+        with pytest.raises(SummaryResponseParseError, match="overview"):
             parse_summary_response(json.dumps(data))
 
-    def test_affected_areas_not_list_raises(self):
+    def test_nested_result_summary_is_unwrapped(self):
+        import json
+        inner = _sample_summary_json()
+        data = {"result": inner}
+        result = parse_summary_response(json.dumps(data))
+        assert result.summary == inner["summary"]
+
+    def test_no_summary_alias_at_all_raises_with_available_keys(self):
+        import json
+        data = {"main_changes": [], "other_field": "x"}
+        with pytest.raises(SummaryResponseParseError, match="Available keys"):
+            parse_summary_response(json.dumps(data))
+
+    def test_uncertainties_string_normalized_to_single_element_list(self):
+        import json
+        data = _sample_summary_json(uncertainties="Need more context")
+        result = parse_summary_response(json.dumps(data))
+        assert result.uncertainties == ["Need more context"]
+
+    def test_uncertainties_none_string_becomes_empty_list(self):
+        import json
+        data = _sample_summary_json(uncertainties="None")
+        result = parse_summary_response(json.dumps(data))
+        assert result.uncertainties == []
+
+    def test_main_changes_string_normalized_to_list(self):
+        import json
+        data = _sample_summary_json(main_changes="Updated login logic")
+        result = parse_summary_response(json.dumps(data))
+        assert result.main_changes == ["Updated login logic"]
+
+    def test_affected_areas_string_normalized_to_list(self):
+        import json
+        data = _sample_summary_json(affected_areas="Authentication")
+        result = parse_summary_response(json.dumps(data))
+        assert result.affected_areas == ["Authentication"]
+
+    def test_uncertainties_empty_string_becomes_empty_list(self):
+        import json
+        data = _sample_summary_json(uncertainties="")
+        result = parse_summary_response(json.dumps(data))
+        assert result.uncertainties == []
+
+    def test_uncertainties_none_value_becomes_empty_list(self):
+        import json
+        data = _sample_summary_json(uncertainties=None)
+        result = parse_summary_response(json.dumps(data))
+        assert result.uncertainties == []
+
+    def test_lists_still_work_normally(self):
+        import json
+        data = _sample_summary_json(main_changes=["a", "b"], uncertainties=["x"])
+        result = parse_summary_response(json.dumps(data))
+        assert result.main_changes == ["a", "b"]
+        assert result.uncertainties == ["x"]
+
+    def test_list_elements_converted_to_string(self):
+        import json
+        data = _sample_summary_json(main_changes=[1, 2])
+        result = parse_summary_response(json.dumps(data))
+        assert result.main_changes == ["1", "2"]
+
+    def test_dict_still_raises(self):
         import json
         data = _sample_summary_json(affected_areas={"x": 1})
         with pytest.raises(SummaryResponseParseError, match="affected_areas"):
             parse_summary_response(json.dumps(data))
 
-    def test_uncertainties_not_list_raises(self):
+    def test_int_still_raises(self):
         import json
         data = _sample_summary_json(uncertainties=123)
         with pytest.raises(SummaryResponseParseError, match="uncertainties"):

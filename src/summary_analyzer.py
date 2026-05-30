@@ -43,7 +43,13 @@ _SYSTEM_PROMPT = """\
 You are a code review assistant. Only use the provided PR information and diff \
 context to generate a summary. Do not supplement with knowledge outside the \
 provided context. Mark anything uncertain under "uncertainties". Do not \
-output whether the PR should be merged. Output must be JSON only."""
+output whether the PR should be merged.
+Return only valid JSON.
+Use exactly these top-level keys: summary, main_changes, affected_areas, uncertainties.
+The field summary must be a string.
+The fields main_changes, affected_areas, and uncertainties must always be \
+JSON arrays. If there is no item, return [].
+Do not use alternative field names such as overview, pr_summary, change_summary, or result."""
 
 
 def build_summary_messages(pr_info, diff_context) -> list[dict[str, str]]:
@@ -80,6 +86,71 @@ def build_summary_messages(pr_info, diff_context) -> list[dict[str, str]]:
 
 _FENCE_PATTERN = re.compile(r"```(?:json)?\s*([\s\S]*?)```", re.IGNORECASE)
 
+_EMPTY_STR_VALUES = {"", "none", "无", "n/a"}
+
+_SUMMARY_ALIASES = [
+    "summary",
+    "pr_summary",
+    "change_summary",
+    "overview",
+    "description",
+    "result_summary",
+    "analysis_summary",
+]
+
+_UNWRAP_KEYS = ["result", "data", "summary_result"]
+
+
+def _get_summary_text(data: dict) -> str:
+    """Extract summary text from data, trying known alias keys in order.
+
+    Args:
+        data: Parsed JSON dict.
+
+    Returns:
+        Non-empty summary string.
+
+    Raises:
+        SummaryResponseParseError: If no alias is found or the value is invalid.
+    """
+    for key in _SUMMARY_ALIASES:
+        value = data.get(key)
+        if value is None:
+            continue
+        if isinstance(value, str):
+            stripped = value.strip()
+            if stripped:
+                return stripped
+            continue
+        raise SummaryResponseParseError(
+            f'Field "{key}" must be a string, got {type(value).__name__}. '
+            f"Available keys: {', '.join(data.keys())}"
+        )
+
+    raise SummaryResponseParseError(
+        f'Missing required field "summary" in model response. '
+        f"Available keys: {', '.join(data.keys())}"
+    )
+
+
+def _normalize_string_list_field(value, field_name: str) -> list[str]:
+    """Normalize a field that should be a list of strings.
+
+    Handles LLMs that return a single string instead of an array.
+    """
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return [str(item) for item in value]
+    if isinstance(value, str):
+        stripped = value.strip()
+        if stripped.lower() in _EMPTY_STR_VALUES:
+            return []
+        return [stripped]
+    raise SummaryResponseParseError(
+        f'Field "{field_name}" must be a list or string, got {type(value).__name__}'
+    )
+
 
 def parse_summary_response(content: str) -> SummaryResult:
     """Parse a model JSON output into SummaryResult.
@@ -113,22 +184,26 @@ def parse_summary_response(content: str) -> SummaryResult:
     if not isinstance(data, dict):
         raise SummaryResponseParseError(f"Expected JSON object, got {type(data).__name__}")
 
-    if "summary" not in data:
-        raise SummaryResponseParseError('Missing required field "summary" in model response')
+    # Unwrap single-level nesting (e.g. {"result": {...}})
+    for key in _UNWRAP_KEYS:
+        if key in data and isinstance(data[key], dict):
+            data = data[key]
+            break
 
-    main_changes = data.get("main_changes", [])
-    affected_areas = data.get("affected_areas", [])
-    uncertainties = data.get("uncertainties", [])
+    summary_text = _get_summary_text(data)
 
-    for name, value in [("main_changes", main_changes), ("affected_areas", affected_areas),
-                        ("uncertainties", uncertainties)]:
-        if not isinstance(value, list):
-            raise SummaryResponseParseError(
-                f'Field "{name}" must be a list, got {type(value).__name__}'
-            )
+    main_changes = _normalize_string_list_field(
+        data.get("main_changes", []), "main_changes"
+    )
+    affected_areas = _normalize_string_list_field(
+        data.get("affected_areas", []), "affected_areas"
+    )
+    uncertainties = _normalize_string_list_field(
+        data.get("uncertainties", []), "uncertainties"
+    )
 
     return SummaryResult(
-        summary=data["summary"],
+        summary=summary_text,
         main_changes=main_changes,
         affected_areas=affected_areas,
         uncertainties=uncertainties,
