@@ -46,6 +46,17 @@ streamlit run app.py
 
 复制 `.env.example` 为 `.env`，并填写必要变量。当前 PR 不会读取这些变量，后续 PR 会使用。
 
+## Product Documents
+
+- [PRD](docs/prd.md)
+- [Evaluation Plan](docs/evaluation.md)
+
+## Prompt Documents
+
+- [Summary Prompt](prompts/summary_prompt.md)
+- [Review Prompt](prompts/review_prompt.md)
+- [Output Schema](prompts/output_schema.md)
+
 ## 开发规范
 
 - 每个 PR 只实现一个功能；
