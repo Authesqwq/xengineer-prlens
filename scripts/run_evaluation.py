@@ -285,7 +285,7 @@ def main():
         cases = [c for c in cases if c["case_id"] == args.case]
     if args.mode:
         for c in cases:
-            c["modes"] = [m for m in c["modes"] if m == args.mode]
+            c["modes"] = [args.mode]
 
     if not cases:
         print("No cases selected.")
