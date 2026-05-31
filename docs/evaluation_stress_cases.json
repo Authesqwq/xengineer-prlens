@@ -1,0 +1,4 @@
+[
+  {"case_id": "S1", "pr_url": "https://github.com/nodejs/node/pull/48829", "repo_type": "external", "pr_type": "Node.js fs bug", "focus": "跨语言 JS/Node.js 代码变更测试", "modes": ["standard"]},
+  {"case_id": "S2", "pr_url": "https://github.com/apache/seatunnel/pull/10468", "repo_type": "external", "pr_type": "大型功能 / 安全风险 / 性能 PR", "focus": "压力测试，验证长 PR、SQL injection、内存安全和性能风险识别", "modes": ["standard"]}
+]

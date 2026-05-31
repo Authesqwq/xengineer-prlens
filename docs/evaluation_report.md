@@ -1,95 +1,117 @@
-# PRLens 测评报告
+# PRLens 自动测评与人工复核报告
 
 ## 1. 测评目的
 
-本测评用于验证 PRLens 在分析准确性、上下文理解、误报与漏报控制、响应速度和使用体验方面的表现，回应实训营题干对产品质量维度的评估要求。
+验证 PRLens 在分析准确性、上下文理解、误报与漏报控制、响应速度和使用体验方面的表现。
 
-## 2. 测评方法
+## 2. 测评集设计
 
-- **测评对象**：本仓库 8 个真实 GitHub Pull Request（PR #1 文档型、#2 URL Parser、#5 diff processor、#6 LLM client、#9 risk analyzer、#11 review suggestion generator、#15 workspace sidebar、#17 final docs）
-- **分析模式**：标准模式（Summary + Risk）覆盖全部 8 个案例；E5/E6/E7 额外运行完整模式（+ Review Suggestions），共 11 次运行
-- **自动记录指标**：分析状态、耗时、风险数量、建议数量、fallback 触发、输出完整性
-- **自动初判标记**：Summary 非空、风险含 evidence、建议含 copy_text、文档型 PR 无高风险误报
-- **人工复核要求**：准确性、误报、漏报判断必须人工确认
+测评集共 20 次运行，覆盖 8 个内部 PR 和 6 个外部 PR。
 
-## 3. 测评案例
+- **内部 PR** (I1-I8)：验证 PRLens 对自身仓库文档型、工具型变更的理解，重点检查是否产生高风险误报
+- **外部 PR** (E1-E6)：覆盖 bug fix、测试变更、平台兼容性、API 设计争议、外部文档 PR
+- Full 模式仅对 I5/I6/E1/E2 启用，控制测评成本
 
-| 案例 | PR | 类型 | 模式 | 状态 | 耗时 | Risk 数 | Suggestion 数 | Fallback | 自动初判 |
-|---|---|---|---|---|---|---|---|---|---|
-| E1 | #1 | 文档型 | Standard | success | 39.6s | 0 | 0 | — | Summary 非空，文档型无高风险 |
-| E2 | #2 | URL Parser | Standard | success | 72.4s | 0 | 0 | Yes | Summary 非空 |
-| E3 | #5 | Diff Processor | Standard | success | 85.0s | 0 | 0 | — | Summary 非空 |
-| E4 | #6 | LLM Client | Standard | success | 80.1s | 0 | 0 | Yes | Summary 非空 |
-| E5 | #9 | Risk Analyzer | Standard | success | 58.0s | 0 | 0 | — | Summary 非空 |
-| E5 | #9 | Risk Analyzer | Full | success | 76.4s | 0 | 0 | Yes | Summary 非空 |
-| E6 | #11 | Suggestion Gen | Standard | success | 59.2s | 0 | 0 | — | Summary 非空 |
-| E6 | #11 | Suggestion Gen | Full | error | — | 0 | 0 | — | 执行失败 |
-| E7 | #15 | Workspace | Standard | success | 84.0s | 0 | 0 | Yes | Summary 非空 |
-| E7 | #15 | Workspace | Full | success | 84.4s | 0 | 0 | — | Summary 非空 |
-| E8 | #17 | 文档型 | Standard | success | 55.3s | 0 | 0 | — | Summary 非空，文档型无高风险 |
+## 3. 测评方法
 
-## 4. 自动测评结果
+- 标准模式 (Summary + Risk) 覆盖所有案例；Full (Summary + Risk + Suggestions) 仅覆盖 4 个案例
+- 测评层面 diff 限制: max_files=8, max_patch_chars=6000, max_total_chars=30000
+- 记录耗时、风险数量、fallback 次数、suggestion 数量等客观指标
+- 准确性、误报、漏报仅做自动初判，必须人工复核
 
-| 指标 | 值 |
-|---|---|
-| 成功案例数 | 10 / 11 |
-| 失败案例数 | 1（E6 Full 模式） |
-| 平均耗时 | 69.4s |
-| 最快耗时 | 39.6s（E1 文档型 PR） |
-| 最慢耗时 | 85.0s（E3 diff processor） |
-| Fallback 触发次数 | 4 / 11 |
-| Summary 全部生成 | 是（10/10 成功案例） |
-| Risk 全部生成 | 是（10/10 成功案例） |
-| Suggestions 生成 | 0（所有案例 risk_count 均为 0，未触发建议生成） |
+## 4. 测评结果总览
 
-### 关键观察
+| 案例 | 类型 | 模式 | 状态 | 耗时(s) | Risk数 | Sug数 | Fallback | 截断 | 自动初判 |
+|---|---|---|---|---|---:|---:|---:|---|---|---|
+| I1 | 文档型 PR | standard | success | 51.45 | 0 | 0 | - | Yes | Summary=✓ |
+| I2 | 小型功能 PR | standard | success | 41.44 | 2 | 0 | - | - | Summary=✓ |
+| I3 | 上下文处理 PR | standard | success | 73.37 | 0 | 0 | Yes | Yes | Summary=✓ |
+| I4 | API client PR | standard | success | 74.03 | 0 | 0 | Yes | Yes | Summary=✓ |
+| I5 | 风险分析模块 PR | standard | success | 80.07 | 0 | 0 | Yes | Yes | Summary=✓ |
+| I5 | 风险分析模块 PR | full | success | 78.59 | 0 | 0 | Yes | Yes | Summary=✓ |
+| I6 | Review suggestion PR | standard | success | 85.38 | 0 | 0 | Yes | Yes | Summary=✓ |
+| I6 | Review suggestion PR | full | success | 75.15 | 0 | 0 | Yes | Yes | Summary=✓ |
+| I7 | UI / 工作区 PR | standard | error | - | 0 | 0 | - | Yes | Summary=✕ |
+| I8 | 最终文档 PR | standard | error | - | 0 | 0 | - | Yes | Summary=✕ |
+| E1 | 小型 bug fix | standard | success | 56.77 | 0 | 0 | - | - | Summary=✓ |
+| E1 | 小型 bug fix | full | success | 65.12 | 0 | 0 | - | - | Summary=✓ |
+| E2 | bug fix + tests | standard | success | 80.76 | 1 | 0 | - | - | Summary=✓ |
+| E2 | bug fix + tests | full | success | 72.06 | 0 | 0 | Yes | - | Summary=✓ |
+| E3 | 数据解析 bug | standard | success | 67.99 | 1 | 0 | - | - | Summary=✓ |
+| E4 | 平台兼容性 bug | standard | success | 76.44 | 0 | 0 | Yes | - | Summary=✓ |
+| E5 | 外部文档 PR | standard | success | 17.37 | 0 | 0 | - | - | Summary=✓ |
+| E6 | API 行为 / 设计争议 PR | standard | error | - | 0 | 0 | - | - | Summary=✕ |
+| S1 | Node.js fs bug | standard | error | - | 0 | 0 | - | - | Summary=✕ |
+| S2 | 大型功能 / 安全风险 / 性能 PR | standard | success | 83.72 | 0 | 0 | Yes | Yes | Summary=✓ |
 
-1. **Summary 稳定性**：10 个成功案例中 Summary 全部非空生成，模型能正常返回结构化输出。
-2. **Risk 分析稳定性**：10 个成功案例中 Risk 结果全部返回，但 4 个触发了 fallback（空内容或非法 JSON 被自动重试后仍失败，返回低风险兜底）。这说明对这些 PR 的 diff 内容，部分模型输出不够稳定。
-3. **无高风险误报**：测评 PR 均为文档型或工具型 PR，模型未对它们生成高风险误报（risk_count=0 或仅 fallback）。
-4. **响应速度**：平均 69.4s/次，最快 39.6s，最慢 85.0s。作为包含 GitHub API + LLM 调用的全链路分析，在可接受范围内。
-5. **E6 失败**：Full 模式下 E6（review suggestion generator PR）执行失败，需进一步排查。
+**统计**: 16 成功 / 4 失败 / 0 跳过 | 平均耗时 67.5s | Fallback 9 次 | risk>0: 3 案例 | sug>0: 0 案例 | 截断: 8 次
 
-### 自动质量标记
+## 5. 分类观察
 
-| 标记 | 通过率 |
-|---|---|
-| summary_non_empty | 10/10 (100%) |
-| risk_has_evidence_when_present | 0/0 (无 risk items，不适用) |
-| no_high_risk_for_docs_only | E1、E8 均通过 |
-| completed_without_exception | 10/11 (90.9%) |
+### 5.1 文档型 PR
+内部文档型 PR (I1, I8) 和外部文档 PR (E5): 检查 Summary 是否生成，是否无高风险误报。
 
-## 5. 对题干维度的回应
+### 5.2 小型 bug fix
+E1 (requests#7004): 极小 diff 的边界条件修复，检查风险识别是否合理。
 
-| 题干维度 | 本次测评如何验证 | 当前结果 | 仍需人工判断 |
+### 5.3 测试与兼容性变更
+E2 (click#3126), E4 (click#2969): 含测试变更的 bug fix，检查测试缺失提示。
+
+### 5.4 API / 设计争议 PR
+E6 (fastapi#10694): 含大量讨论的 API 行为变更，检查是否理解 PR 背景。
+
+### 5.5 完整模式与 Review Suggestions
+I5, I6, E1, E2 运行 Full 模式，检查 Suggestions 是否在存在风险时生成。
+
+## 6. 对题干维度的回应
+
+| 题干维度 | 如何验证 | 当前证据 | 仍需人工判断 |
 |---|---|---|---|
-| 分析准确性 | 检查 Summary 是否生成 | 10/10 Summary 非空 | 是 — 内容准确度需人工评估 |
-| 上下文理解 | 检查是否能处理 PR metadata 与 diff context | 10/10 成功处理 | 是 — 理解深度需人工评估 |
-| 误报控制 | 检查文档型 PR 是否出现高风险输出 | E1、E8 均无高风险误报 | 是 — 需更多样本 |
-| 漏报控制 | 记录风险项覆盖情况 | risk_count=0 在所有案例 | 是 — 本仓库 PR 风险较少，需外部样本验证 |
-| 响应速度 | 记录每个案例耗时 | 平均 69.4s | 否 — 客观数据 |
-| 使用体验 | 结合 Demo 页面、分析模式、进度反馈 | Demo 可操作，支持三种模式和进度 | 部分需人工体验 |
+| 分析准确性 | Summary 是否生成、Risk evidence 是否有 | Summary 生成率, evidence 检查 | 是 |
+| 上下文理解 | PR metadata + diff 是否被正确处理 | 文件统计、截断标记 | 是 |
+| 误报控制 | 文档型 PR 是否有高风险 | no_high_risk_for_docs 标记 | 是 |
+| 漏报控制 | 外部 bug fix PR 是否识别出风险 | risk_count 统计 | 是 |
+| 响应速度 | 每个案例耗时 | 平均 67.5s | 否 |
+| 使用体验 | 进度反馈、模式、导出 | Demo 已验证 | 部分 |
 
-## 6. 局限性
+## 7. 人工复核记录
 
-- **样本来源单一**：8 个测评案例均来自本仓库，类型偏向文档和工具 PR，缺乏复杂的多文件业务逻辑变更
-- **Risk 0 导致建议未触发**：本仓库 PR 的 diff 主要是文档和简单代码变更，模型未识别出风险项，导致 Review Suggestions 在所有成功案例中均为空（除 E6 失败外）
-- **Fallback 率偏高**：4/11 触发 fallback，说明部分 LLM 输出仍需 prompt 优化
-- **自动测评不能替代人工 Review**：本报告仅记录客观指标和自动初判，准确性、误报和漏报需人工复核
-- **LLM 输出可能波动**：同一 PR 多次运行可能得到不同结果
-- **未测试大 PR**：测评 PR 的 diff 均较小，未覆盖长 diff 截断场景
+| 案例 | Summary准确性 | 上下文理解 | 风险合理性 | 明显误报 | 明显漏报 | 人工结论 |
+|---|---:|---:|---:|---|---|---|
+| I1 | 待复核 | 待复核 | 待复核 | 待复核 | 待复核 | 待复核 |
+| I2 | 待复核 | 待复核 | 待复核 | 待复核 | 待复核 | 待复核 |
+| I3 | 待复核 | 待复核 | 待复核 | 待复核 | 待复核 | 待复核 |
+| I4 | 待复核 | 待复核 | 待复核 | 待复核 | 待复核 | 待复核 |
+| I5 | 待复核 | 待复核 | 待复核 | 待复核 | 待复核 | 待复核 |
+| I5 | 待复核 | 待复核 | 待复核 | 待复核 | 待复核 | 待复核 |
+| I6 | 待复核 | 待复核 | 待复核 | 待复核 | 待复核 | 待复核 |
+| I6 | 待复核 | 待复核 | 待复核 | 待复核 | 待复核 | 待复核 |
+| I7 | 待复核 | 待复核 | 待复核 | 待复核 | 待复核 | 待复核 |
+| I8 | 待复核 | 待复核 | 待复核 | 待复核 | 待复核 | 待复核 |
+| E1 | 待复核 | 待复核 | 待复核 | 待复核 | 待复核 | 待复核 |
+| E1 | 待复核 | 待复核 | 待复核 | 待复核 | 待复核 | 待复核 |
+| E2 | 待复核 | 待复核 | 待复核 | 待复核 | 待复核 | 待复核 |
+| E2 | 待复核 | 待复核 | 待复核 | 待复核 | 待复核 | 待复核 |
+| E3 | 待复核 | 待复核 | 待复核 | 待复核 | 待复核 | 待复核 |
+| E4 | 待复核 | 待复核 | 待复核 | 待复核 | 待复核 | 待复核 |
+| E5 | 待复核 | 待复核 | 待复核 | 待复核 | 待复核 | 待复核 |
+| E6 | 待复核 | 待复核 | 待复核 | 待复核 | 待复核 | 待复核 |
+| S1 | 待复核 | 待复核 | 待复核 | 待复核 | 待复核 | 待复核 |
+| S2 | 待复核 | 待复核 | 待复核 | 待复核 | 待复核 | 待复核 |
 
-## 7. 后续优化方向
+## 8. 局限性
 
-- 扩大测评案例范围（引入外部公开仓库的中大型 PR）
-- 引入人工标注（准确度 1-5 分、误报/漏报标记）
-- 添加 cross-mode 一致性检查（标准模式 vs 完整模式的 Risk 结果是否一致）
-- 优化 risk analyzer prompt 以降低 fallback 率
-- 增加仓库级上下文检索能力
-- 记录用户反馈，建立误报/漏报优化闭环
+- 自动测评不能替代人工 Review
+- 测评样本 14 个案例，类型覆盖有限
+- LLM 输出可能波动
+- 外部 PR 类型仍有限（小型 bug fix 为主）
+- 大型 PR 可能受 diff 截断影响（测评限制为 8 文件 / 30000 字符）
+- Review Suggestions 触发依赖于 Risk 先识别出风险项
 
-## 8. 附录
+## 9. 后续优化方向
 
-- 测评脚本：`scripts/run_evaluation.py`
-- 测评原始数据：`docs/evaluation_results.json`
-- 运行命令：`GITHUB_TOKEN=$(gh auth token) python scripts/run_evaluation.py`
+- 扩大 golden cases 集合，引入人工标注
+- 增加仓库级上下文检索
+- 接入团队规则库
+- 建立反馈闭环
+- 降低 fallback 率，提升响应速度
