@@ -188,6 +188,7 @@ pytest -q
 | [docs/final_submission.md](docs/final_submission.md) | 最终提交检查清单 |
 | [docs/known_limitations.md](docs/known_limitations.md) | 已知限制与 Demo 风险 |
 | [docs/prlens_product_audit.md](docs/prlens_product_audit.md) | 产品审查报告 |
+| [docs/evaluation_report.md](docs/evaluation_report.md) | 测评报告 |
 | [docs/evaluation.md](docs/evaluation.md) | 评测体系框架 |
 | [prompts/summary_prompt.md](prompts/summary_prompt.md) | 变更总结 Prompt 设计 |
 | [prompts/review_prompt.md](prompts/review_prompt.md) | Review Prompt 设计 |
