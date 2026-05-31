@@ -7,6 +7,7 @@ analysis modes, session history, and report export.
 
 import os
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import streamlit as st
 from dotenv import load_dotenv
 
@@ -782,18 +783,34 @@ if analyze_clicked:
             # LLM config
             llm_config = load_llm_config_from_env()
 
-            # Step: summary
-            current = "summary"
-            _update_progress()
-            summary_result = generate_pr_summary(pr_info, diff_context, llm_config, output_language=output_language)
-            completed.add("summary")
-
-            # Step: risk
+            # Step: summary + risk (parallel)
+            risk_result = None
             if do_risk:
-                current = "risk"
+                current = "summary"
                 _update_progress()
-                risk_result = analyze_pr_risks(pr_info, diff_context, llm_config, output_language=output_language)
+                with ThreadPoolExecutor(max_workers=2) as pool:
+                    sf = pool.submit(generate_pr_summary, pr_info, diff_context, llm_config, output_language=output_language)
+                    rf = pool.submit(analyze_pr_risks, pr_info, diff_context, llm_config, output_language=output_language)
+                    for f in as_completed([sf, rf]):
+                        if f == sf:
+                            try:
+                                summary_result = sf.result()
+                            except Exception:
+                                summary_result = generate_pr_summary(pr_info, diff_context, llm_config, output_language=output_language)
+                        else:
+                            try:
+                                risk_result = rf.result()
+                            except Exception:
+                                risk_result = analyze_pr_risks(pr_info, diff_context, llm_config, output_language=output_language)
+                completed.add("summary")
                 completed.add("risk")
+                current = "summary"
+                _update_progress()
+            else:
+                current = "summary"
+                _update_progress()
+                summary_result = generate_pr_summary(pr_info, diff_context, llm_config, output_language=output_language)
+                completed.add("summary")
 
             # Step: suggestions
             if do_suggestions:
