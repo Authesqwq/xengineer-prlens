@@ -299,7 +299,14 @@ def main():
             print(f"  {r['mode']}: {r['status']} | {r['elapsed_seconds']}s | risk={r['risk_count']} | sug={r['suggestion_count']} | fb={r['fallback_used']}")
             all_results.append(r)
 
-    out_path = ROOT_DIR / "docs" / "evaluation_results.json"
+    is_single = bool(args.case)
+    if is_single:
+        out_path = ROOT_DIR / "docs" / "evaluation_single_case_results.json"
+        report_path = ROOT_DIR / "docs" / "evaluation_single_case_report.md"
+    else:
+        out_path = ROOT_DIR / "docs" / "evaluation_results.json"
+        report_path = ROOT_DIR / "docs" / "evaluation_report.md"
+
     out_path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -315,8 +322,12 @@ def main():
     errs = sum(1 for r in all_results if r["status"] == "error")
     skips = sum(1 for r in all_results if r["status"] == "skipped")
     print(f"\nDone. {succ} succeeded, {skips} skipped, {errs} errors")
-
-    generate_report(all_results, ROOT_DIR / "docs" / "evaluation_report.md")
+    if is_single:
+        print("Single-case run completed. Formal evaluation report was NOT overwritten.")
+        print(f"Output: {out_path}")
+    else:
+        generate_report(all_results, report_path)
+        print(f"Full report saved: {report_path}")
 
 
 if __name__ == "__main__":
