@@ -113,7 +113,7 @@ class TestBuildMessages:
     def test_system_contains_input_only_constraint(self):
         msgs = build_review_suggestion_messages(FakePRInfo(), FakeDiffContext(), FakeRiskResult())
         s = msgs[0]["content"].lower()
-        assert "only use the provided" in s
+        assert "use provided risk items" in s
 
     def test_system_contains_no_force_suggestions(self):
         msgs = build_review_suggestion_messages(FakePRInfo(), FakeDiffContext(), FakeRiskResult())
