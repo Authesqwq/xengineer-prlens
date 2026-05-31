@@ -23,26 +23,26 @@
 
 | 案例 | 类型 | 模式 | 状态 | 耗时(s) | Risk数 | Sug数 | Fallback | 截断 | 自动初判 |
 |---|---|---|---|---|---:|---:|---:|---|---|---|
-| I1 | 文档型 PR | standard | success | 31.43 | 0 | 0 | - | Yes | Summary=✓ |
-| I2 | 小型功能 PR | standard | success | 84.07 | 0 | 0 | Yes | - | Summary=✓ |
-| I3 | 上下文处理 PR | standard | success | 77.56 | 0 | 0 | Yes | Yes | Summary=✓ |
-| I4 | API client PR | standard | success | 82.6 | 0 | 0 | Yes | Yes | Summary=✓ |
-| I5 | 风险分析模块 PR | standard | success | 74.37 | 0 | 0 | Yes | Yes | Summary=✓ |
-| I5 | 风险分析模块 PR | full | success | 78.14 | 0 | 0 | Yes | Yes | Summary=✓ |
-| I6 | Review suggestion PR | standard | success | 70.82 | 0 | 0 | Yes | Yes | Summary=✓ |
-| I6 | Review suggestion PR | full | success | 78.41 | 0 | 0 | Yes | Yes | Summary=✓ |
-| I7 | UI / 工作区 PR | standard | success | 76.3 | 0 | 0 | - | Yes | Summary=✓ |
-| I8 | 最终文档 PR | standard | success | 69.17 | 0 | 0 | - | Yes | Summary=✓ |
-| E1 | 小型 bug fix | standard | success | 26.48 | 1 | 0 | - | - | Summary=✓ |
-| E1 | 小型 bug fix | full | error | - | 1 | 0 | - | - | Summary=✓ |
-| E2 | bug fix + tests | standard | success | 104.79 | 0 | 0 | Yes | - | Summary=✓ |
-| E2 | bug fix + tests | full | success | 97.93 | 0 | 0 | Yes | - | Summary=✓ |
-| E3 | 数据解析 bug | standard | success | 75.35 | 0 | 0 | Yes | - | Summary=✓ |
-| E4 | 平台兼容性 bug | standard | success | 95.55 | 0 | 0 | Yes | - | Summary=✓ |
-| E5 | 外部文档 PR | standard | success | 15.17 | 0 | 0 | - | - | Summary=✓ |
-| E6 | API 行为 / 设计争议 PR | standard | success | 68.41 | 0 | 0 | Yes | - | Summary=✓ |
+| I1 | 文档型 PR | standard | success | 22.24 | 0 | 0 | - | Yes | Summary=✓ |
+| I2 | 小型功能 PR | standard | success | 29.79 | 0 | 0 | Yes | - | Summary=✓ |
+| I3 | 上下文处理 PR | standard | success | 29.41 | 0 | 0 | Yes | Yes | Summary=✓ |
+| I4 | API client PR | standard | success | 28.77 | 0 | 0 | - | Yes | Summary=✓ |
+| I5 | 风险分析模块 PR | standard | success | 19.01 | 1 | 0 | - | Yes | Summary=✓ |
+| I5 | 风险分析模块 PR | full | success | 19.79 | 0 | 0 | - | Yes | Summary=✓ |
+| I6 | Review suggestion PR | standard | success | 28.01 | 0 | 0 | - | Yes | Summary=✓ |
+| I6 | Review suggestion PR | full | success | 30.71 | 0 | 0 | - | Yes | Summary=✓ |
+| I7 | UI / 工作区 PR | standard | success | 30.82 | 1 | 0 | - | Yes | Summary=✓ |
+| I8 | 最终文档 PR | standard | success | 28.25 | 0 | 0 | - | Yes | Summary=✓ |
+| E1 | 小型 bug fix | standard | success | 11.76 | 0 | 0 | - | - | Summary=✓ |
+| E1 | 小型 bug fix | full | success | 11.01 | 0 | 0 | - | - | Summary=✓ |
+| E2 | bug fix + tests | standard | success | 13.91 | 1 | 0 | - | - | Summary=✓ |
+| E2 | bug fix + tests | full | success | 28.61 | 0 | 0 | Yes | - | Summary=✓ |
+| E3 | 数据解析 bug | standard | success | 10.75 | 0 | 0 | - | - | Summary=✓ |
+| E4 | 平台兼容性 bug | standard | success | 27.27 | 0 | 0 | - | - | Summary=✓ |
+| E5 | 外部文档 PR | standard | success | 6.93 | 0 | 0 | - | - | Summary=✓ |
+| E6 | API 行为 / 设计争议 PR | standard | success | 26.41 | 0 | 0 | Yes | - | Summary=✓ |
 
-**统计**: 17 成功 / 1 失败 / 0 跳过 | 平均耗时 71.0s | Fallback 12 次 | risk>0: 1 案例 | sug>0: 0 案例 | 截断: 9 次
+**统计**: 18 成功 / 0 失败 / 0 跳过 | 平均耗时 22.4s | Fallback 4 次 | risk>0: 3 案例 | sug>0: 0 案例 | 截断: 9 次
 
 ## 5. 分类观察
 
@@ -69,7 +69,7 @@ I5, I6, E1, E2 运行 Full 模式，检查 Suggestions 是否在存在风险时�
 | 上下文理解 | PR metadata + diff 是否被正确处理 | 文件统计、截断标记 | 是 |
 | 误报控制 | 文档型 PR 是否有高风险 | no_high_risk_for_docs 标记 | 是 |
 | 漏报控制 | 外部 bug fix PR 是否识别出风险 | risk_count 统计 | 是 |
-| 响应速度 | 每个案例耗时 | 平均 71.0s | 否 |
+| 响应速度 | 每个案例耗时 | 平均 22.4s | 否 |
 | 使用体验 | 进度反馈、模式、导出 | Demo 已验证 | 部分 |
 
 ## 7. 人工复核记录
