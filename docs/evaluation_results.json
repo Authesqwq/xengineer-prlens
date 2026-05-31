@@ -1,0 +1,48 @@
+{
+  "generated_at": "2026-05-31T09:28:53.917572+00:00",
+  "repository": "Authesqwq/xengineer-prlens",
+  "limits": {
+    "max_files": 8,
+    "max_patch_chars": 6000,
+    "max_total_chars": 30000
+  },
+  "total_runs": 1,
+  "cases": [
+    {
+      "case_id": "I8",
+      "pr_url": "https://github.com/Authesqwq/xengineer-prlens/pull/17",
+      "repo_type": "internal",
+      "pr_type": "最终文档 PR",
+      "focus": "验证文档型最终交付 PR 的低风险判断",
+      "mode": "standard",
+      "status": "success",
+      "elapsed_seconds": 43.4,
+      "files_total": 8,
+      "files_included": 8,
+      "files_skipped": 0,
+      "diff_chars_before": 30276,
+      "diff_chars_after": 17878,
+      "truncated": true,
+      "summary_generated": true,
+      "risk_generated": true,
+      "risk_count": 1,
+      "suggestion_generated": false,
+      "suggestion_count": 0,
+      "fallback_used": false,
+      "error_message": null,
+      "auto_quality_flags": {
+        "summary_non_empty": true,
+        "risk_has_evidence": true,
+        "suggestion_has_copy_text": true,
+        "no_high_risk_for_docs": true,
+        "completed_without_exception": true,
+        "truncated": true,
+        "fallback_used": false
+      },
+      "human_review_required": true,
+      "notes": "",
+      "summary_result": "SummaryResult(summary='This PR prepares final demo materials and documentation for the PRLens project. It significantly updates the README with a more comprehensive structure covering project overview, background, core features, product evolution, demo flow, architecture, setup, and testing. The PRD is updated to v0.3 reflecting implemented MVP scope and analysis modes. New documents are added: demo script, evaluation cases, final submission checklist, known limitations, devcontainer configuration, and Streamlit theme config. The focus is on delivering polished documentation and demo readiness for the final submission.', main_changes=['README.md: Replaced brief project description with a comprehensive document covering overview, background, features, evolution, demo flow, analysis modes, system architecture, project structure, environment setup, and demo cases.', 'docs/prd.md: Updated to v0.3—added analysis modes, session history, progress feedback, fallback, bilingual support, and restructured user flows and data requirements to match implemented MVP.', 'docs/demo_script.md: Added structured 2-minute and 5-minute demo scripts explaining the product, demo steps, core features, stability design, and capability boundaries.', 'docs/evaluation_cases.md: Added demo verification cases with expected behavior for octocat/HelloWorld, fastapi PRs, and a placeholder for a medium-complexity PR.', 'docs/final_submission.md: Added final submission checklist covering repository hygiene, functionality, testing, and demo preparation.', 'docs/known_limitations.md: Documented MVP and AI capability limitations, demo risks, and suggested mitigations.', '.devcontainer/devcontainer.json: Added Codespaces configuration for Python 3.11 with Streamlit auto-launch.', '.streamlit/config.toml: Added light theme with custom colors and minimal toolbar for visual consistency.'], affected_areas=['Documentation (README, PRD)', 'Demo preparation (demo script, evaluation cases, final checklist, known limitations)', 'Development environment (devcontainer config)', 'User interface (Streamlit theme)'], uncertainties=[\"The PR body mentions a '产品审查报告' (product review report) that is not present in the diff. It may have been added separately or omitted.\"], raw_response='{\\n  \"summary\": \"This PR prepares final demo materials and documentation for the PRLens project. It significantly updates the README with a more comprehensive structure covering project overview, background, core features, product evolution, demo flow, architecture, setup, and testing. The PRD is updated to v0.3 reflecting implemented MVP scope and analysis modes. New documents are added: demo script, evaluation cases, final submission checklist, known limitations, devcontainer configuration, and Streamlit theme config. The focus is on delivering polished documentation and demo readiness for the final submission.\",\\n  \"main_changes\": [\\n    \"README.md: Replaced brief project description with a comprehensive document covering overview, background, features, evolution, demo flow, analysis modes, system architecture, project structure, environment setup, and demo cases.\",\\n    \"docs/prd.md: Updated to v0.3—added analysis modes, session history, progress feedback, fallback, bilingual support, and restructured user flows and data requirements to match implemented MVP.\",\\n    \"docs/demo_script.md: Added structured 2-minute and 5-minute demo scripts explaining the product, demo steps, core features, stability design, and capability boundaries.\",\\n    \"docs/evaluation_cases.md: Added demo verification cases with expected behavior for octocat/HelloWorld, fastapi PRs, and a placeholder for a medium-complexity PR.\",\\n    \"docs/final_submission.md: Added final submission checklist covering repository hygiene, functionality, testing, and demo preparation.\",\\n    \"docs/known_limitations.md: Documented MVP and AI capability limitations, demo risks, and suggested mitigations.\",\\n    \".devcontainer/devcontainer.json: Added Codespaces configuration for Python 3.11 with Streamlit auto-launch.\",\\n    \".streamlit/config.toml: Added light theme with custom colors and minimal toolbar for visual consistency.\"\\n  ],\\n  \"affected_areas\": [\\n    \"Documentation (README, PRD)\",\\n    \"Demo preparation (demo script, evaluation cases, final checklist, known limitations)\",\\n    \"Development environment (devcontainer config)\",\\n    \"User interface (Streamlit theme)\"\\n  ],\\n  \"uncertainties\": [\\n    \"The PR body mentions a \\'产品审查报告\\' (product review report) that is not present in the diff. It may have been added separately or omitted.\"\\n  ]\\n}')",
+      "risk_result": "RiskAnalysisResult(overall_risk_level='low', risk_items=[RiskItem(risk_type='security', severity='low', file_path='.devcontainer/devcontainer.json', evidence=\"postAttachCommand runs 'streamlit run app.py --server.enableCORS false --server.enableXsrfProtection false'\", explanation='Disabling CORS and XSRF protection reduces security. Although intended for a local dev container, this configuration might be mistakenly reused in production or shared environments, potentially exposing the Streamlit app to cross-site request attacks.', impact='If the dev container configuration is used outside a purely local environment, the app could be vulnerable to cross-origin and XSRF attacks.', suggestion=\"Add a comment in the devcontainer.json clarifying that these flags are for local development only and should not be used in production. Alternatively, omit these flags and rely on Streamlit's default protections.\", confidence='high', need_human_check=True)], limitations=['The diff context is limited to documentation and configuration files; no source code changes were included.', 'One or more file patches were truncated due to size; potential risks in unshown files cannot be assessed.', 'The PR is closed, so no further changes are expected, but configuration risks may affect usage of the repository content.'], raw_response='{\\n  \"overall_risk_level\": \"low\",\\n  \"risk_items\": [\\n    {\\n      \"risk_type\": \"security\",\\n      \"severity\": \"low\",\\n      \"file_path\": \".devcontainer/devcontainer.json\",\\n      \"evidence\": \"postAttachCommand runs \\'streamlit run app.py --server.enableCORS false --server.enableXsrfProtection false\\'\",\\n      \"explanation\": \"Disabling CORS and XSRF protection reduces security. Although intended for a local dev container, this configuration might be mistakenly reused in production or shared environments, potentially exposing the Streamlit app to cross-site request attacks.\",\\n      \"impact\": \"If the dev container configuration is used outside a purely local environment, the app could be vulnerable to cross-origin and XSRF attacks.\",\\n      \"suggestion\": \"Add a comment in the devcontainer.json clarifying that these flags are for local development only and should not be used in production. Alternatively, omit these flags and rely on Streamlit\\'s default protections.\",\\n      \"confidence\": \"high\",\\n      \"need_human_check\": true\\n    }\\n  ],\\n  \"limitations\": [\\n    \"The diff context is limited to documentation and configuration files; no source code changes were included.\",\\n    \"One or more file patches were truncated due to size; potential risks in unshown files cannot be assessed.\",\\n    \"The PR is closed, so no further changes are expected, but configuration risks may affect usage of the repository content.\"\\n  ]\\n}')"
+    }
+  ]
+}

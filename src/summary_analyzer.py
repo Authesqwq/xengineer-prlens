@@ -4,7 +4,7 @@ import json
 import re
 from dataclasses import dataclass
 
-from src.llm_client import LLMConfig, LLMResponse, chat_completion
+from src.llm_client import LLMClientError, LLMConfig, chat_completion
 
 
 # ---------------------------------------------------------------------------
