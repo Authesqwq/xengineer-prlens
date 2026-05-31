@@ -26,7 +26,16 @@ if str(ROOT_DIR) not in sys.path:
 
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(ROOT_DIR / ".env")
+
+# Always prefer gh CLI token if available (avoids dotenv encoding issues)
+try:
+    import subprocess as _sp
+    result = _sp.run(["gh", "auth", "token"], capture_output=True, text=True)
+    if result.returncode == 0 and result.stdout.strip():
+        os.environ["GITHUB_TOKEN"] = result.stdout.strip()
+except Exception:
+    pass
 
 from src.pr_parser import parse_github_pr_url, PRUrlParseError
 from src.github_client import (
