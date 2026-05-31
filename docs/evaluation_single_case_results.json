@@ -1,0 +1,47 @@
+{
+  "generated_at": "2026-05-31T09:54:39.502387+00:00",
+  "repository": "Authesqwq/xengineer-prlens",
+  "limits": {
+    "max_files": 8,
+    "max_patch_chars": 6000,
+    "max_total_chars": 30000
+  },
+  "total_runs": 1,
+  "cases": [
+    {
+      "case_id": "I8",
+      "pr_url": "https://github.com/Authesqwq/xengineer-prlens/pull/17",
+      "repo_type": "internal",
+      "pr_type": "最终文档 PR",
+      "focus": "验证文档型最终交付 PR 的低风险判断",
+      "mode": "standard",
+      "status": "error",
+      "elapsed_seconds": null,
+      "files_total": 8,
+      "files_included": 8,
+      "files_skipped": 0,
+      "diff_chars_before": 30276,
+      "diff_chars_after": 17878,
+      "truncated": true,
+      "summary_generated": true,
+      "risk_generated": false,
+      "risk_count": 0,
+      "suggestion_generated": false,
+      "suggestion_count": 0,
+      "fallback_used": false,
+      "error_message": "LLMClientError: LLM bad request (400): {\"error\":{\"message\":\"The supported API model names are deepseek-v4-pro or deepseek-v4-flash, but you passed deepseek-v4-flash[1m].\",\"type\":\"invalid_request_error\",\"param\":null,\"",
+      "auto_quality_flags": {
+        "summary_non_empty": true,
+        "risk_has_evidence": true,
+        "suggestion_has_copy_text": true,
+        "no_high_risk_for_docs": true,
+        "completed_without_exception": false,
+        "truncated": true,
+        "fallback_used": false
+      },
+      "human_review_required": true,
+      "notes": "",
+      "summary_result": "SummaryResult(summary='Summary generation did not produce stable structured output. The following is a deterministic fallback based on PR metadata and diff statistics.\\n\\nTitle: docs: prepare final demo materials\\nAuthor: Authesqwq\\nDescription: ## 功能描述\\n完成最终交付文档准备：中文 README、PRD v0.3、产品范围演进说明、Demo 验证案例、演示讲解稿、最终提交检查清单、已知限制文档和产品审查报告。\\n\\n## 实现思路\\n将最终功能范围、产品演进、使用方式、部署说明和能力边界整理为交付文档。PRD v0.3 定位为最终范围校准版。\\n\\n## 测试方式\\n- [x] pytest -q\\n- [x] 检查文档链接有效\\n- [x] 确认 .env 和 secrets 未提交\\n\\nThis PR modifies 8 file(s), adding 2531 and removing 215 lines.', main_changes=[], affected_areas=[], uncertainties=['Summary generation did not produce stable structured output. The following is a deterministic fallback based on PR metadata and diff statistics.'], raw_response='')"
+    }
+  ]
+}
