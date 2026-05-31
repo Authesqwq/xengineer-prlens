@@ -4,7 +4,7 @@ import json
 import re
 from dataclasses import dataclass
 
-from src.llm_client import LLMConfig, LLMResponse, chat_completion
+from src.llm_client import LLMClientError, LLMConfig, chat_completion
 
 
 # ---------------------------------------------------------------------------
@@ -231,9 +231,52 @@ def parse_summary_response(content: str) -> SummaryResult:
 # ---------------------------------------------------------------------------
 
 
+def _build_deterministic_summary(pr_info, diff_context, output_language: str = "en") -> SummaryResult:
+    """Build a deterministic fallback summary from PR metadata."""
+    zh = output_language == "zh"
+    note = (
+        "摘要生成未能获得稳定结构化输出，以下为基于 PR 元信息和 diff 统计生成的降级摘要。"
+        if zh else
+        "Summary generation did not produce stable structured output. "
+        "The following is a deterministic fallback based on PR metadata and diff statistics."
+    )
+    changes_desc = (
+        f"该 PR 修改了 {diff_context.total_files} 个文件"
+        if zh else
+        f"This PR modifies {diff_context.total_files} file(s)"
+    )
+    if pr_info.additions or pr_info.deletions:
+        changes_desc += (
+            f"，新增 {pr_info.additions} 行，删除 {pr_info.deletions} 行。"
+            if zh else
+            f", adding {pr_info.additions} and removing {pr_info.deletions} lines."
+        )
+    else:
+        changes_desc += "。"
+
+    summary = (
+        f"{note}\n\n"
+        f"{'标题' if zh else 'Title'}: {pr_info.title}\n"
+        f"{'作者' if zh else 'Author'}: {pr_info.author}\n"
+        f"{'描述' if zh else 'Description'}: {pr_info.body or ('(空)' if zh else '(empty)')}\n"
+        f"{changes_desc}"
+    )
+    return SummaryResult(
+        summary=summary,
+        main_changes=[],
+        affected_areas=[],
+        uncertainties=[note],
+        raw_response="",
+    )
+
+
 def generate_pr_summary(pr_info, diff_context, llm_config: LLMConfig,
                         output_language: str = "en") -> SummaryResult:
-    """Generate a PR change summary using the LLM.
+    """Generate a PR change summary using the LLM, with retry and fallback.
+
+    On empty content or JSON parse failure, retries once. If retry also fails
+    and raw text is available, uses it as degraded summary. Otherwise returns
+    deterministic fallback based on PR metadata.
 
     Args:
         pr_info: PRInfo object.
@@ -242,12 +285,35 @@ def generate_pr_summary(pr_info, diff_context, llm_config: LLMConfig,
         output_language: "en" or "zh".
 
     Returns:
-        SummaryResult with the parsed summary.
-
-    Raises:
-        SummaryAnalyzerError / SummaryResponseParseError: On parse failures.
-        LLMClientError / subclasses: On API failures (passed through).
+        SummaryResult — always returns a result, never raises on parse failure.
     """
     messages = build_summary_messages(pr_info, diff_context, output_language=output_language)
-    response = chat_completion(messages, llm_config)
-    return parse_summary_response(response.content)
+    try:
+        response = chat_completion(messages, llm_config)
+        if not response.content or not response.content.strip():
+            return _retry_summary(messages, pr_info, diff_context, llm_config, output_language)
+        return parse_summary_response(response.content)
+    except (LLMClientError, SummaryResponseParseError):
+        return _retry_summary(messages, pr_info, diff_context, llm_config, output_language)
+
+
+def _retry_summary(messages, pr_info, diff_context, llm_config: LLMConfig,
+                   output_language: str) -> SummaryResult:
+    zh = output_language == "zh"
+    retry_msg = (
+        "上一条回复是空内容或无法解析为 JSON。请只返回一个合法 JSON 对象。"
+        if zh else
+        "The previous response was empty or could not be parsed as JSON. "
+        "Return only a valid JSON object."
+    )
+    try:
+        retry_resp = chat_completion(messages + [{"role": "user", "content": retry_msg}], llm_config)
+        if retry_resp.content and retry_resp.content.strip():
+            try:
+                return parse_summary_response(retry_resp.content)
+            except SummaryResponseParseError:
+                pass  # Fall through to raw text fallback
+    except LLMClientError:
+        pass
+
+    return _build_deterministic_summary(pr_info, diff_context, output_language)

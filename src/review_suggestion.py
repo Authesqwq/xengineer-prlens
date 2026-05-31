@@ -4,7 +4,7 @@ import json
 import re
 from dataclasses import dataclass
 
-from src.llm_client import LLMConfig, chat_completion
+from src.llm_client import LLMClientError, LLMConfig, chat_completion
 
 
 # ---------------------------------------------------------------------------
@@ -52,36 +52,15 @@ class ReviewSuggestionParseError(ReviewSuggestionError):
 
 
 _SYSTEM_PROMPT = """\
-You are a Pull Request review suggestion generator. Only use the provided PR \
-information, diff context, and risk analysis results to create structured \
-review suggestions. Do not supplement with knowledge outside the provided \
-context. Do not judge whether the PR should be merged. Do not force \
-suggestions — if no risks are provided, return empty suggestions.
+You are a Pull Request review suggestion generator. Use provided risk items \
+to create structured suggestions. Do not force suggestions — return empty \
+if no risks. Every suggestion must have evidence and an actionable suggestion.
+copy_text must be suitable as a PR review comment draft (max 200 chars).
+Return only valid JSON, no markdown fences. Use keys: suggestions, limitations.
+priority: high|medium|low. Max 3 suggestions. Keep titles under 60 chars.
 
-Every suggestion must contain evidence and an actionable suggestion.
-The copy_text field should be suitable as a PR review comment draft.
-Return only valid JSON. Use exactly these top-level keys: suggestions, limitations.
-
-priority must be one of: high, medium, low.
-
-Format:
-{
-  "suggestions": [
-    {
-      "title": "...",
-      "priority": "medium",
-      "file_path": "src/example.py",
-      "problem": "...",
-      "evidence": "...",
-      "impact": "...",
-      "suggestion": "...",
-      "copy_text": "...",
-      "source_risk_type": "logic",
-      "need_human_check": true
-    }
-  ],
-  "limitations": []
-}"""
+Format (compact):
+{"suggestions":[{"title":"T","priority":"medium","file_path":"f.py","problem":"P","evidence":"E","impact":"I","suggestion":"S","copy_text":"C","source_risk_type":"logic","need_human_check":true}],"limitations":[]}"""
 
 
 def _language_instruction(lang: str) -> str:
@@ -286,28 +265,62 @@ def _no_risk_limitation(lang: str) -> str:
     return "No review suggestions were generated because no risk items were provided."
 
 
+def _build_fallback_suggestions(risk_items, output_language: str = "en") -> list:
+    """Build deterministic fallback suggestions from risk items.
+
+    Each risk item generates one fallback suggestion with a human-review notice.
+    Maximum 3 suggestions. All marked with source_risk_type='fallback'.
+    """
+    zh = output_language == "zh"
+    fallback_suggestions = []
+    for ri in risk_items[:3]:
+        title = (
+            f"人工复核: {ri.risk_type} 风险于 {ri.file_path}"
+            if zh else
+            f"Manual review: {ri.risk_type} risk in {ri.file_path}"
+        )
+        copy_text = (
+            f"建议人工复核该变更：当前风险项指出 {ri.evidence}，可能影响 {ri.risk_type}。"
+            f"建议补充边界处理、异常处理或测试用例后再合并。"
+            if zh else
+            f"Please manually review: the risk is related to {ri.evidence} "
+            f"and may affect {ri.risk_type}. Consider adding validation, "
+            f"error handling, or tests before merging."
+        )
+        fallback_suggestions.append(ReviewSuggestion(
+            title=title,
+            priority=ri.severity if ri.severity in ("high", "medium", "low") else "medium",
+            file_path=ri.file_path,
+            problem=ri.explanation or ri.evidence,
+            evidence=ri.evidence,
+            impact=ri.impact or "",
+            suggestion=ri.suggestion or ("" if zh else ""),
+            copy_text=copy_text,
+            source_risk_type="fallback",
+            need_human_check=True,
+        ))
+    return fallback_suggestions
+
+
 def generate_review_suggestions(
     pr_info, diff_context, risk_result, llm_config: LLMConfig,
     output_language: str = "en",
 ) -> ReviewSuggestionResult:
     """Generate structured review suggestions from risk analysis results.
 
-    If risk_result has no risk items, returns an empty result without
-    calling the LLM.
+    If risk_result has no risk items, returns empty without calling LLM.
+    On empty content or JSON parse failure, retries once with compact prompt.
+    If retry also fails, builds deterministic fallback suggestions from risk items.
 
     Args:
         pr_info: PRInfo object.
         diff_context: DiffContext object.
-        risk_result: RiskAnalysisResult object.
+        risk_result: RiskAnalysisResult object with risk_items.
         llm_config: LLMConfig for the model call.
         output_language: "en" or "zh".
 
     Returns:
-        ReviewSuggestionResult with parsed suggestions.
-
-    Raises:
-        ReviewSuggestionError / ReviewSuggestionParseError: On parse failures.
-        LLMClientError / subclasses: On API failures (passed through).
+        ReviewSuggestionResult — always returns a result on parse error.
     """
     if not risk_result.risk_items:
         return ReviewSuggestionResult(
@@ -316,8 +329,52 @@ def generate_review_suggestions(
             raw_response="",
         )
 
+    zh = output_language == "zh"
+
+    def _try_generate(msgs):
+        try:
+            resp = chat_completion(msgs, llm_config)
+            if not resp.content or not resp.content.strip():
+                return None
+            return parse_review_suggestions_response(resp.content)
+        except (LLMClientError, ReviewSuggestionParseError):
+            return None
+
     messages = build_review_suggestion_messages(
         pr_info, diff_context, risk_result, output_language=output_language
     )
-    response = chat_completion(messages, llm_config)
-    return parse_review_suggestions_response(response.content)
+    result = _try_generate(messages)
+    if result is not None:
+        return result
+
+    # Retry with compact instruction
+    retry_msg = (
+        "上一次输出无法解析。请只返回一个紧凑 JSON 对象，最多 3 条 suggestions，"
+        "每条 copy_text 不超过 200 字符。不要使用 markdown。"
+        if zh else
+        "Previous output could not be parsed. Return only one compact JSON object, "
+        "max 3 suggestions, copy_text max 200 chars. No markdown."
+    )
+    retry_msgs = messages + [{"role": "user", "content": retry_msg}]
+    try:
+        retry_resp = chat_completion(retry_msgs, llm_config)
+        if retry_resp.content and retry_resp.content.strip():
+            try:
+                return parse_review_suggestions_response(retry_resp.content)
+            except ReviewSuggestionParseError:
+                pass
+    except LLMClientError:
+        pass
+
+    # Deterministic fallback
+    fallback = _build_fallback_suggestions(risk_result.risk_items, output_language)
+    lim = (
+        ["Review Suggestions 使用降级规则生成，需人工复核。"]
+        if zh else
+        ["Review suggestions were generated by deterministic fallback. Manual review required."]
+    )
+    return ReviewSuggestionResult(
+        suggestions=fallback,
+        limitations=lim,
+        raw_response="",
+    )

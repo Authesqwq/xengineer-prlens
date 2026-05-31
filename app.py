@@ -7,6 +7,7 @@ analysis modes, session history, and report export.
 
 import os
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import streamlit as st
 from dotenv import load_dotenv
 
@@ -20,6 +21,9 @@ from src.diff_processor import build_diff_context
 from src.llm_client import (
     LLMClientError,
     LLMConfigError,
+    get_default_model_profile,
+    get_model_name,
+    get_model_profiles,
     load_llm_config_from_env,
 )
 from src.summary_analyzer import SummaryAnalyzerError, generate_pr_summary
@@ -659,6 +663,26 @@ with st.sidebar:
 
     st.divider()
 
+    # Model profile
+    profiles = get_model_profiles()
+    default_profile = get_default_model_profile()
+    if "model_profile" not in st.session_state:
+        st.session_state["model_profile"] = default_profile
+    profile_options = {"fast": "快速模型" if lang == "zh" else "Fast model",
+                       "quality": "高质量模型" if lang == "zh" else "Quality model"}
+    selected_profile = st.radio(
+        "模型档位" if lang == "zh" else "Model Profile",
+        list(profile_options.keys()),
+        format_func=lambda k: profile_options[k],
+        index=0 if st.session_state["model_profile"] == "fast" else 1,
+        key="model_profile_radio",
+        label_visibility="visible",
+    )
+    st.session_state["model_profile"] = selected_profile
+    st.caption(profiles[selected_profile][f"description_{lang}"])
+
+    st.divider()
+
     # History
     st.caption(t(lang, "history_label"))
     history = st.session_state.get("analysis_history", [])
@@ -781,19 +805,39 @@ if analyze_clicked:
 
             # LLM config
             llm_config = load_llm_config_from_env()
+            model_profile = st.session_state.get("model_profile", "fast")
+            model_name = get_model_name(model_profile)
+            if model_name:
+                llm_config.model = model_name
 
-            # Step: summary
-            current = "summary"
-            _update_progress()
-            summary_result = generate_pr_summary(pr_info, diff_context, llm_config, output_language=output_language)
-            completed.add("summary")
-
-            # Step: risk
+            # Step: summary + risk (parallel)
+            risk_result = None
             if do_risk:
-                current = "risk"
+                current = "summary"
                 _update_progress()
-                risk_result = analyze_pr_risks(pr_info, diff_context, llm_config, output_language=output_language)
+                with ThreadPoolExecutor(max_workers=2) as pool:
+                    sf = pool.submit(generate_pr_summary, pr_info, diff_context, llm_config, output_language=output_language)
+                    rf = pool.submit(analyze_pr_risks, pr_info, diff_context, llm_config, output_language=output_language)
+                    for f in as_completed([sf, rf]):
+                        if f == sf:
+                            try:
+                                summary_result = sf.result()
+                            except Exception:
+                                summary_result = generate_pr_summary(pr_info, diff_context, llm_config, output_language=output_language)
+                        else:
+                            try:
+                                risk_result = rf.result()
+                            except Exception:
+                                risk_result = analyze_pr_risks(pr_info, diff_context, llm_config, output_language=output_language)
+                completed.add("summary")
                 completed.add("risk")
+                current = "summary"
+                _update_progress()
+            else:
+                current = "summary"
+                _update_progress()
+                summary_result = generate_pr_summary(pr_info, diff_context, llm_config, output_language=output_language)
+                completed.add("summary")
 
             # Step: suggestions
             if do_suggestions:
@@ -833,6 +877,8 @@ if analyze_clicked:
                 "review_suggestions_result": review_suggestions_result,
                 "elapsed_seconds": elapsed_seconds,
                 "analysis_mode": analysis_mode,
+                "model_profile": model_profile,
+                "model_name": model_name,
             }
             st.session_state["analysis_result"] = result_data
             st.session_state["result_lang"] = output_language
@@ -850,6 +896,8 @@ if analyze_clicked:
                 "risk_count": risk_count,
                 "language": output_language,
                 "analysis_mode": analysis_mode,
+                "model_profile": model_profile,
+                "model_name": model_name,
                 "created_at": time.strftime("%H:%M:%S"),
                 "elapsed_seconds": elapsed_seconds,
                 "result": result_data,
@@ -919,7 +967,8 @@ if cached:
     analysis_mode = cached.get("analysis_mode", st.session_state.get("analysis_mode", "standard"))
     if elapsed is not None:
         time_str = format_elapsed_time(elapsed, lang)
-        st.caption(f"{t(lang, 'analysis_time', time=time_str)} · {t(lang, 'mode_colon')}: {_mode_display_name(analysis_mode, lang)}")
+        model_label = cached.get("model_name", "")
+        st.caption(f"{t(lang, 'analysis_time', time=time_str)} · {t(lang, 'mode_colon')}: {_mode_display_name(analysis_mode, lang)} · 模型: {model_label}" if lang == "zh" else f"{t(lang, 'analysis_time', time=time_str)} · {t(lang, 'mode_colon')}: {_mode_display_name(analysis_mode, lang)} · Model: {model_label}")
     st.markdown(f"**[{pr_info.title}]({pr_info.html_url})**")
     c_m = st.columns(6)
     c_m[0].metric(t(lang, "status"), format_pr_status(pr_info, lang))
