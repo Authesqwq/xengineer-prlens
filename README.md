@@ -36,7 +36,7 @@ PRLens 填补了轻量级、低接入成本的 PR 快速审查场景。
 - Markdown 报告导出
 - 分阶段分析进度反馈
 - 分析耗时展示
-- 风险分析空响应和非法 JSON fallback（优雅降级，不崩溃）
+- 风险分析空响应和非法 JSON fallback
 
 ## 4. 产品范围演进
 
@@ -165,7 +165,6 @@ streamlit run app.py
 pytest -q
 ```
 
-当前测试结果：**266 passed，0 failed**。
 
 ## 13. Demo 案例
 
@@ -211,11 +210,3 @@ PRLens 不定位为 GitHub Copilot Code Review、CodeRabbit 或 Qodo 这类企�
 
 它的定位是：面向公开 GitHub PR 的**轻量级 Review 辅助工具**，帮助用户用较低接入成本快速完成 PR 理解、风险初筛和 Review 建议整理。
 
-## 17. 开发过程
-
-项目采用小颗粒 PR 方式迭代：
-
-- **PR1-PR6**：项目初始化、GitHub 数据获取和 diff 处理链路
-- **PR7-PR13**：LLM Client、变更总结、风险分析、Review 建议和 Demo 集成
-- **PR14-PR17**：UI 优化、fallback、侧栏工作区、历史记录、分析模式和进度反馈
-- **PR18**：最终文档、Demo 材料和交付准备
