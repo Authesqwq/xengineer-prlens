@@ -1,5 +1,6 @@
 # PRLens：AI PR Review 助手
 
+**Streamlit链接：https://1xengineer-prlens.streamlit.app/**
 ## 1. 项目概览
 
 PRLens 是一个面向公开 GitHub Pull Request 的轻量级 AI Review 辅助工具。用户输入 PR 链接后，系统会自动获取 PR 基本信息、变更文件和 diff 上下文，并生成：
