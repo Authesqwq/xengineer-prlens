@@ -1,6 +1,6 @@
 # PRLens：AI PR Review 助手
 
-**视频链接：**
+**视频链接：https://www.bilibili.com/video/BV1yBVU6mE7M/**
 
 **Streamlit链接：https://1xengineer-prlens.streamlit.app/**
 ## 1. 项目概览
