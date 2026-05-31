@@ -124,6 +124,8 @@ def _parse_float_env(name: str, default: float) -> float:
 def chat_completion(
     messages: list[dict[str, str]],
     config: LLMConfig,
+    *,
+    model: str | None = None,
 ) -> LLMResponse:
     """Send a chat completion request and return the parsed response.
 
@@ -157,8 +159,11 @@ def chat_completion(
         "Authorization": f"Bearer {config.api_key}",
         "Content-Type": "application/json",
     }
+    actual_model = model or config.model
+    if not actual_model:
+        raise LLMConfigError("model is required")
     payload = {
-        "model": config.model,
+        "model": actual_model,
         "messages": messages,
         "temperature": config.temperature,
         "max_tokens": config.max_tokens,
@@ -198,7 +203,50 @@ def chat_completion(
 
     return LLMResponse(
         content=content,
-        model=data.get("model", config.model),
+        model=data.get("model", actual_model),
         usage=data.get("usage", {}),
         raw_response=data,
     )
+
+
+# ---------------------------------------------------------------------------
+# Model profile helpers
+# ---------------------------------------------------------------------------
+
+
+def get_model_profiles() -> dict:
+    """Return model profile configuration from environment variables.
+
+    Returns dict with 'fast' and 'quality' keys, each containing label,
+    description, and model name.
+    """
+    default_model = os.getenv("LLM_MODEL", "")
+    return {
+        "fast": {
+            "label_zh": "快速模型",
+            "label_en": "Fast model",
+            "description_zh": "优先响应速度，适合在线 Demo 和快速浏览。",
+            "description_en": "Prioritizes speed for demos and quick review.",
+            "model": os.getenv("LLM_MODEL_FAST") or default_model,
+        },
+        "quality": {
+            "label_zh": "高质量模型",
+            "label_en": "Quality model",
+            "description_zh": "优先分析质量，适合深度 Review。",
+            "description_en": "Prioritizes analysis quality for deeper review.",
+            "model": os.getenv("LLM_MODEL_PRO") or default_model,
+        },
+    }
+
+
+def get_default_model_profile() -> str:
+    """Return the default model profile key ('fast' or 'quality')."""
+    default = os.getenv("LLM_MODEL_DEFAULT", "fast").strip().lower()
+    if default in ("fast", "quality"):
+        return default
+    return "fast"
+
+
+def get_model_name(profile: str) -> str:
+    """Return the actual model name for a given profile."""
+    return get_model_profiles().get(profile, {}).get("model", "")
