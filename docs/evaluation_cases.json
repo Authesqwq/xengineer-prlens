@@ -1,0 +1,16 @@
+[
+  {"case_id": "I1", "pr_url": "https://github.com/Authesqwq/xengineer-prlens/pull/1", "repo_type": "internal", "pr_type": "文档型 PR", "focus": "验证文档变更是否不会被误判为高风险代码变更", "modes": ["standard"]},
+  {"case_id": "I2", "pr_url": "https://github.com/Authesqwq/xengineer-prlens/pull/2", "repo_type": "internal", "pr_type": "小型功能 PR", "focus": "验证 URL parser 的输入校验和边界处理理解", "modes": ["standard"]},
+  {"case_id": "I3", "pr_url": "https://github.com/Authesqwq/xengineer-prlens/pull/5", "repo_type": "internal", "pr_type": "上下文处理 PR", "focus": "验证 diff processor、截断和 context assembly 理解", "modes": ["standard"]},
+  {"case_id": "I4", "pr_url": "https://github.com/Authesqwq/xengineer-prlens/pull/6", "repo_type": "internal", "pr_type": "API client PR", "focus": "验证 LLM client、环境变量和异常处理理解", "modes": ["standard"]},
+  {"case_id": "I5", "pr_url": "https://github.com/Authesqwq/xengineer-prlens/pull/9", "repo_type": "internal", "pr_type": "风险分析模块 PR", "focus": "验证 risk analyzer 自身的结构化输出、fallback 和错误边界", "modes": ["standard", "full"]},
+  {"case_id": "I6", "pr_url": "https://github.com/Authesqwq/xengineer-prlens/pull/11", "repo_type": "internal", "pr_type": "Review suggestion PR", "focus": "验证建议生成模块、copy_text 和 evidence 约束", "modes": ["standard", "full"]},
+  {"case_id": "I7", "pr_url": "https://github.com/Authesqwq/xengineer-prlens/pull/15", "repo_type": "internal", "pr_type": "UI / 工作区 PR", "focus": "验证多功能 UI 改动、分析模式和历史记录理解", "modes": ["standard"]},
+  {"case_id": "I8", "pr_url": "https://github.com/Authesqwq/xengineer-prlens/pull/17", "repo_type": "internal", "pr_type": "最终文档 PR", "focus": "验证文档型最终交付 PR 的低风险判断", "modes": ["standard"]},
+  {"case_id": "E1", "pr_url": "https://github.com/psf/requests/pull/7004", "repo_type": "external", "pr_type": "小型 bug fix", "focus": "验证对极小 diff 中边界条件修复的理解", "modes": ["standard", "full"]},
+  {"case_id": "E2", "pr_url": "https://github.com/pallets/click/pull/3126", "repo_type": "external", "pr_type": "bug fix + tests", "focus": "验证代码、测试和 changelog 联合理解", "modes": ["standard", "full"]},
+  {"case_id": "E3", "pr_url": "https://github.com/pandas-dev/pandas/pull/64571", "repo_type": "external", "pr_type": "数据解析 bug", "focus": "验证复杂 bug 描述、解析逻辑和测试变更理解", "modes": ["standard"]},
+  {"case_id": "E4", "pr_url": "https://github.com/pallets/click/pull/2969", "repo_type": "external", "pr_type": "平台兼容性 bug", "focus": "验证 Linux readline 行为和平台兼容性风险理解", "modes": ["standard"]},
+  {"case_id": "E5", "pr_url": "https://github.com/psf/requests/pull/7181", "repo_type": "external", "pr_type": "外部文档 PR", "focus": "验证文档 PR 是否不会被误判为代码高风险", "modes": ["standard"]},
+  {"case_id": "E6", "pr_url": "https://github.com/fastapi/fastapi/pull/10694", "repo_type": "external", "pr_type": "API 行为 / 设计争议 PR", "focus": "验证对 PR metadata、讨论背景和代码变更边界的理解", "modes": ["standard"]}
+]
